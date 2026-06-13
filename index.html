@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>道路の凸凹を伝えるアプリ</title>
+  <style>
+    :root {
+      --ink: #20262b;
+      --muted: #64717a;
+      --line: #dbe4e8;
+      --paper: #ffffff;
+      --bg: #eef4f6;
+      --green: #16876f;
+      --green-soft: #dff4ed;
+      --blue: #2c6bc5;
+      --blue-soft: #e8f0ff;
+      --orange: #e36f2f;
+      --red: #c9434b;
+      --shadow: 0 22px 54px rgba(32, 38, 43, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .hero {
+      min-height: 92vh;
+      display: grid;
+      align-items: center;
+      padding: 28px;
+      background:
+        linear-gradient(rgba(238, 244, 246, 0.88), rgba(238, 244, 246, 0.76)),
+        repeating-linear-gradient(90deg, transparent 0 62px, rgba(44, 107, 197, 0.08) 62px 66px),
+        repeating-linear-gradient(0deg, transparent 0 62px, rgba(44, 107, 197, 0.08) 62px 66px),
+        #e7eef2;
+      overflow: hidden;
+    }
+
+    .hero-inner {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+      gap: 34px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      min-height: 32px;
+      align-items: center;
+      padding: 0 11px;
+      border-radius: 999px;
+      color: #0f654f;
+      background: var(--green-soft);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 18px 0 16px;
+      font-size: clamp(40px, 7vw, 76px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      margin: 0 0 24px;
+      max-width: 34em;
+      color: #47545c;
+      font-size: 18px;
+      line-height: 1.85;
+    }
+
+    .line {
+      display: block;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--blue);
+      text-decoration: none;
+      font-weight: 800;
+      box-shadow: 0 12px 28px rgba(44, 107, 197, 0.26);
+    }
+
+    .button.secondary {
+      color: var(--blue);
+      background: var(--blue-soft);
+      box-shadow: none;
+    }
+
+    .map-visual {
+      position: relative;
+      min-height: 520px;
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, transparent 0 56px, rgba(32, 38, 43, 0.06) 56px 60px),
+        linear-gradient(transparent 0 56px, rgba(32, 38, 43, 0.06) 56px 60px),
+        #f8fbfc;
+      background-size: 120px 120px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(32, 38, 43, 0.12);
+      overflow: hidden;
+    }
+
+    .road {
+      position: absolute;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: inset 0 0 0 2px rgba(32, 38, 43, 0.08);
+    }
+
+    .road.one {
+      left: -12%;
+      right: -8%;
+      top: 45%;
+      height: 92px;
+      transform: rotate(-7deg);
+    }
+
+    .road.two {
+      left: 48%;
+      top: -14%;
+      width: 86px;
+      height: 128%;
+      transform: rotate(13deg);
+    }
+
+    .road.three {
+      left: 8%;
+      right: 8%;
+      top: 70%;
+      height: 58px;
+      transform: rotate(2deg);
+    }
+
+    .safe-line {
+      position: absolute;
+      left: 14%;
+      top: 22%;
+      width: 67%;
+      height: 52%;
+      border: 9px solid transparent;
+      border-left-color: var(--green);
+      border-bottom-color: var(--green);
+      border-radius: 0 0 0 140px;
+      transform: rotate(-8deg);
+      filter: drop-shadow(0 8px 14px rgba(22, 135, 111, 0.24));
+    }
+
+    .pin {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      display: grid;
+      place-items: center;
+      border-radius: 50% 50% 50% 9px;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      color: #fff;
+      border: 4px solid #fff;
+      font-weight: 900;
+      box-shadow: 0 12px 28px rgba(32, 38, 43, 0.24);
+    }
+
+    .pin span {
+      transform: rotate(45deg);
+    }
+
+    .pin.red { background: var(--red); left: 53%; top: 43%; }
+    .pin.orange { background: var(--orange); left: 69%; top: 52%; }
+    .pin.green { background: var(--green); left: 31%; top: 67%; }
+
+    .notice {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 24px;
+      display: grid;
+      gap: 4px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      color: #fff;
+      background: rgba(32, 38, 43, 0.92);
+      box-shadow: 0 12px 28px rgba(32, 38, 43, 0.2);
+    }
+
+    .notice strong {
+      font-size: 16px;
+    }
+
+    .notice span {
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 13px;
+    }
+
+    section {
+      padding: 76px 28px;
+      background: var(--paper);
+    }
+
+    section.alt {
+      background: #f6fafb;
+    }
+
+    .wrap {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+    }
+
+    .section-title {
+      margin: 0 0 24px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      min-height: 190px;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(32, 38, 43, 0.06);
+    }
+
+    .card b {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .card p,
+    .text {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      counter-reset: step;
+    }
+
+    .step {
+      position: relative;
+      min-height: 150px;
+      padding: 20px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 12px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--green);
+      font-weight: 900;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .feature-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .feature-list li {
+      padding: 14px 16px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #44515a;
+      line-height: 1.7;
+    }
+
+    .demo-link {
+      margin-top: 22px;
+      padding: 22px;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      border: 1px solid rgba(44, 107, 197, 0.16);
+    }
+
+    footer {
+      padding: 26px 28px;
+      color: var(--muted);
+      background: #fff;
+      border-top: 1px solid var(--line);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .hero-inner,
+      .two-col,
+      .grid,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .map-visual {
+        min-height: 460px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .hero,
+      section {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .hero {
+        padding-top: 20px;
+      }
+
+      .map-visual {
+        min-height: 390px;
+      }
+
+      .notice {
+        left: 14px;
+        right: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div>
+        <span class="eyebrow">移動しやすい道を、みんなで共有</span>
+        <h1>道路の凸凹を伝えるアプリ</h1>
+        <p class="lead">
+          <span class="line">車いすやベビーカーで移動する人が、</span>
+          <span class="line">段差・凸凹・舗装の崩れを事前に知り、</span>
+          <span class="line">不安を減らして安全な道を選べるようにするアプリです。</span>
+        </p>
+        <div class="actions">
+          <a class="button" href="road-safety-map-app.html">試作品を見る</a>
+          <a class="button secondary" href="#features">機能を見る</a>
+        </div>
+      </div>
+
+      <div class="map-visual" aria-label="アプリの地図イメージ">
+        <div class="road one"></div>
+        <div class="road two"></div>
+        <div class="road three"></div>
+        <div class="safe-line"></div>
+        <div class="pin red"><span>段</span></div>
+        <div class="pin orange"><span>凸</span></div>
+        <div class="pin green"><span>安</span></div>
+        <div class="notice">
+          <strong>
+            <span class="line">この先、歩道に</span>
+            <span class="line">大きな段差があります</span>
+          </strong>
+          <span>
+            <span class="line">スマホ・イヤホン・スマートウォッチで</span>
+            <span class="line">近づく前に通知</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="wrap">
+      <h2 class="section-title">このアプリが解決したいこと</h2>
+      <div class="grid">
+        <article class="card">
+          <b>誰のため？</b>
+          <p>
+            <span class="line">ベビーカーや車いすを使う人など、</span>
+            <span class="line">道の状態によって移動しにくさを感じる人のためのアプリです。</span>
+            <span class="line">外出前に道の様子を知ることで、安心して移動しやすくなります。</span>
+          </p>
+        </article>
+        <article class="card">
+          <b>どんな課題？</b>
+          <p>
+            <span class="line">舗装が崩れている道や段差、狭い歩道は、</span>
+            <span class="line">移動の負担や危険につながります。</span>
+            <span class="line">事前に分かれば、危険な道を避けやすくなります。</span>
+          </p>
+        </article>
+        <article class="card">
+          <b>どう解決する？</b>
+          <p>
+            <span class="line">利用者同士で危険な場所を共有し、</span>
+            <span class="line">地図と通知でわかりやすく伝えます。</span>
+            <span class="line">見つけた情報が、次に通る人の安全にもつながります。</span>
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="features">
+    <div class="wrap two-col">
+      <div>
+        <h2 class="section-title">主な機能</h2>
+        <p class="text">
+          <span class="line">危険を知らせるだけでなく、</span>
+          <span class="line">使う人に合わせて情報を変え、</span>
+          <span class="line">自分に合った安全なルートを選びやすくします。</span>
+        </p>
+      </div>
+      <ul class="feature-list">
+        <li>
+          <span class="line">道路の凸凹、段差、舗装はがれ、</span>
+          <span class="line">急な坂、狭い道を地図に投稿できます。</span>
+        </li>
+        <li>
+          <span class="line">車いす向け、ベビーカー向けなど、</span>
+          <span class="line">使う乗り物に合わせて危険表示を切り替えます。</span>
+          <span class="line">必要な情報だけを見やすくできます。</span>
+        </li>
+        <li>
+          <span class="line">危険に近づいたらスマホ通知、イヤホン音声、</span>
+          <span class="line">スマートウォッチの振動で知らせます。</span>
+        </li>
+        <li>
+          <span class="line">危険の少ない道を優先して、</span>
+          <span class="line">より通りやすいルートを案内します。</span>
+          <span class="line">移動の負担を減らすことにつながります。</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <h2 class="section-title">使い方の流れ</h2>
+      <div class="flow">
+        <article class="step">
+          <b>使う乗り物を選ぶ</b>
+          <p class="text">
+            <span class="line">車いす、ベビーカーなど、</span>
+            <span class="line">自分の移動方法を選びます。</span>
+          </p>
+        </article>
+        <article class="step">
+          <b>危険な場所を見る</b>
+          <p class="text">
+            <span class="line">地図上で、</span>
+            <span class="line">近くの段差や凸凹を確認します。</span>
+          </p>
+        </article>
+        <article class="step">
+          <b>見つけた危険を共有</b>
+          <p class="text">
+            <span class="line">道の状態や危険度を投稿して、</span>
+            <span class="line">次に通る人に伝えます。</span>
+          </p>
+        </article>
+        <article class="step">
+          <b>安全な道を選ぶ</b>
+          <p class="text">
+            <span class="line">危険を避けたルートで、</span>
+            <span class="line">安心して移動します。</span>
+          </p>
+        </article>
+      </div>
+
+      <div class="demo-link">
+        <p class="text">
+          <span class="line">実際のアプリ画面をイメージした</span>
+          <span class="line">試作品も用意しています。</span>
+        </p>
+        <div class="actions">
+          <a class="button" href="road-safety-map-app.html">試作品を開く</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    道の情報をみんなで集めて、移動しやすいまちへ。
+  </footer>
+</body>
+</html>
