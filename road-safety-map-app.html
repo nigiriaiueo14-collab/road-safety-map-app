@@ -196,6 +196,13 @@
       border: 1px solid var(--line);
     }
 
+    .map-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
     .map {
       position: absolute;
       inset: 0;
@@ -228,6 +235,15 @@
     .hazard-marker.medium { background: var(--warn); }
     .hazard-marker.high { background: var(--danger); }
     .hazard-marker.dimmed { opacity: 0.35; }
+
+    .location-marker {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #2378ff;
+      border: 4px solid #fff;
+      box-shadow: 0 0 0 8px rgba(35, 120, 255, 0.22), 0 8px 18px rgba(35, 120, 255, 0.28);
+    }
 
     .route-point {
       position: absolute;
@@ -425,8 +441,12 @@
         <div class="status">
           <span class="pill" id="profilePill">車いす向け</span>
           <span id="routeStatus">危険の少ないルートを表示中</span>
+          <span id="locationStatus" aria-live="polite">現在地は未表示</span>
         </div>
-        <button class="secondary" type="button" id="routeButton">安全ルートを再計算</button>
+        <div class="map-actions">
+          <button class="secondary" type="button" id="locationButton">現在地を表示</button>
+          <button class="secondary" type="button" id="routeButton">安全ルートを再計算</button>
+        </div>
       </div>
 
       <div class="map" id="map"></div>
@@ -473,6 +493,8 @@
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
     const addButton = document.querySelector("#addButton");
+    const locationButton = document.querySelector("#locationButton");
+    const locationStatus = document.querySelector("#locationStatus");
     const routeButton = document.querySelector("#routeButton");
     const routeStatus = document.querySelector("#routeStatus");
     const alertBox = document.querySelector("#alertBox");
@@ -503,6 +525,8 @@
     let selectedId = null;
     let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
     let markers = [];
+    let currentLocationMarker;
+    let currentAccuracyCircle;
     let safeRouteLine;
     const realMap = L.map(map, {
       zoomControl: true,
@@ -652,6 +676,71 @@
       }, 1600);
     }
 
+    function isInKagawa(lat, lng) {
+      return lat >= kagawaBounds[0][0] && lat <= kagawaBounds[1][0]
+        && lng >= kagawaBounds[0][1] && lng <= kagawaBounds[1][1];
+    }
+
+    function showCurrentLocation() {
+      if (!navigator.geolocation) {
+        locationStatus.textContent = "この端末では現在地を取得できません";
+        return;
+      }
+
+      locationButton.disabled = true;
+      locationButton.textContent = "取得中";
+      locationStatus.textContent = "現在地を確認中";
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        const latlng = [latitude, longitude];
+
+        if (currentLocationMarker) currentLocationMarker.remove();
+        if (currentAccuracyCircle) currentAccuracyCircle.remove();
+
+        currentAccuracyCircle = L.circle(latlng, {
+          radius: accuracy || 40,
+          color: "#2378ff",
+          fillColor: "#2378ff",
+          fillOpacity: 0.12,
+          weight: 2
+        }).addTo(realMap);
+
+        currentLocationMarker = L.marker(latlng, {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            html: '<div class="location-marker" aria-label="現在地"></div>'
+          })
+        }).addTo(realMap);
+        currentLocationMarker.bindTooltip("現在地", { direction: "top", offset: [0, -14] });
+
+        if (isInKagawa(latitude, longitude)) {
+          realMap.setView(latlng, Math.max(realMap.getZoom(), 12));
+          locationStatus.textContent = "現在地を表示中";
+        } else {
+          realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
+          locationStatus.textContent = "現在地は香川県の表示範囲外です";
+        }
+        locationButton.disabled = false;
+        locationButton.textContent = "現在地を表示";
+      }, (error) => {
+        const messages = {
+          1: "位置情報の許可が必要です",
+          2: "現在地を取得できませんでした",
+          3: "現在地の取得に時間がかかっています"
+        };
+        locationStatus.textContent = messages[error.code] || "現在地を取得できませんでした";
+        locationButton.disabled = false;
+        locationButton.textContent = "現在地を表示";
+      }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000
+      });
+    }
+
     function drawSafeRoute() {
       if (safeRouteLine) safeRouteLine.remove();
       safeRouteLine = L.polyline(safeRoutePoints, {
@@ -672,6 +761,7 @@
     });
 
     addButton.addEventListener("click", addHazard);
+    locationButton.addEventListener("click", showCurrentLocation);
     routeButton.addEventListener("click", recalcRoute);
 
     render();
