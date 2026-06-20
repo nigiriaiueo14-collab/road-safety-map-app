@@ -430,7 +430,7 @@
       </div>
 
       <div class="map" id="map"></div>
-      <div class="map-note">香川県高松市周辺の実地図を表示しています。ピンは試作品用のサンプル危険情報です。</div>
+      <div class="map-note">香川県全体の地図を表示しています。ピンは試作品用のサンプル危険情報です。</div>
 
       <div class="alert hidden" id="alertBox">
         <strong id="alertTitle"></strong>
@@ -457,10 +457,11 @@
   <script>
     const defaultHazards = [
       { id: "h1", place: "高松駅前の歩道", type: "段差", level: "high", note: "駅前広場から横断歩道へ向かう部分に段差があります。", lat: 34.3506, lng: 134.0467, targets: ["wheelchair", "stroller"] },
-      { id: "h2", place: "栗林公園北口付近", type: "凸凹", level: "medium", note: "歩道の一部に木の根による盛り上がりがあります。", lat: 34.3312, lng: 134.0444, targets: ["stroller"] },
-      { id: "h3", place: "瓦町駅周辺", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", lat: 34.3381, lng: 134.0528, targets: ["wheelchair", "stroller"] },
-      { id: "h4", place: "高松丸亀町商店街付近", type: "狭い道", level: "low", note: "時間帯によって人通りが多く、通りにくくなります。", lat: 34.3431, lng: 134.0508, targets: ["wheelchair"] },
-      { id: "h5", place: "玉藻公園入口付近", type: "急な坂", level: "medium", note: "入口近くに傾斜があり、車いすでは押す力が必要です。", lat: 34.3501, lng: 134.0509, targets: ["wheelchair"] }
+      { id: "h2", place: "丸亀駅周辺", type: "凸凹", level: "medium", note: "歩道の一部に古い舗装の盛り上がりがあります。", lat: 34.2919, lng: 133.7931, targets: ["stroller"] },
+      { id: "h3", place: "坂出駅前通り", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", lat: 34.3129, lng: 133.8569, targets: ["wheelchair", "stroller"] },
+      { id: "h4", place: "観音寺市中心部", type: "狭い道", level: "low", note: "時間帯によって人通りが多く、通りにくくなります。", lat: 34.1275, lng: 133.6614, targets: ["wheelchair"] },
+      { id: "h5", place: "さぬき市志度駅付近", type: "急な坂", level: "medium", note: "駅から住宅地へ向かう道に傾斜があります。", lat: 34.3214, lng: 134.1735, targets: ["wheelchair"] },
+      { id: "h6", place: "土庄港周辺", type: "段差", level: "medium", note: "港の近くに小さな段差が続く場所があります。", lat: 34.4862, lng: 134.1856, targets: ["wheelchair", "stroller"] }
     ];
 
     const labels = { wheelchair: "車いす", stroller: "ベビーカー", low: "少し注意", medium: "注意", high: "危険" };
@@ -477,14 +478,25 @@
     const alertBox = document.querySelector("#alertBox");
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
-    const storageKey = "road-safety-hazards-kagawa";
-    const kagawaCenter = [34.3401, 134.0434];
+    const storageKey = "road-safety-hazards-kagawa-prefecture";
+    const kagawaCenter = [34.275, 133.95];
+    const kagawaBounds = [
+      [34.02, 133.43],
+      [34.58, 134.45]
+    ];
+    const sampleAreas = [
+      [34.3506, 134.0467],
+      [34.2919, 133.7931],
+      [34.3129, 133.8569],
+      [34.1275, 133.6614],
+      [34.3214, 134.1735],
+      [34.4862, 134.1856]
+    ];
     const safeRoutePoints = [
       [34.3506, 134.0467],
-      [34.3465, 134.0479],
-      [34.3431, 134.0508],
-      [34.3381, 134.0528],
-      [34.3312, 134.0444]
+      [34.3129, 133.8569],
+      [34.2919, 133.7931],
+      [34.1275, 133.6614]
     ];
 
     let mode = "wheelchair";
@@ -494,13 +506,17 @@
     let safeRouteLine;
     const realMap = L.map(map, {
       zoomControl: true,
-      scrollWheelZoom: true
-    }).setView(kagawaCenter, 13);
+      scrollWheelZoom: true,
+      maxBounds: kagawaBounds,
+      maxBoundsViscosity: 0.75
+    }).setView(kagawaCenter, 9);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(realMap);
+
+    realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     drawSafeRoute();
 
@@ -608,14 +624,15 @@
       const targets = type === "凸凹" || type === "舗装はがれ"
         ? ["wheelchair", "stroller"]
         : ["wheelchair"];
+      const area = sampleAreas[Math.floor(Math.random() * sampleAreas.length)];
       const hazard = {
         id: `h${Date.now()}`,
         place,
         type,
         level,
         note,
-        lat: 34.322 + Math.random() * 0.04,
-        lng: 134.032 + Math.random() * 0.04,
+        lat: area[0] + (Math.random() - 0.5) * 0.035,
+        lng: area[1] + (Math.random() - 0.5) * 0.045,
         targets
       };
       hazards.unshift(hazard);
