@@ -203,6 +203,68 @@
       align-items: center;
     }
 
+    .map-tools {
+      position: absolute;
+      right: 16px;
+      top: 92px;
+      z-index: 1000;
+      display: grid;
+      gap: 8px;
+      width: min(180px, calc(100% - 32px));
+    }
+
+    .map-tool {
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 8px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .map-tool:hover { background: #f5f9fb; }
+
+    .legend {
+      display: grid;
+      gap: 7px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .legend-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 2px #fff;
+      flex: 0 0 auto;
+    }
+
+    .legend-dot.high { background: var(--danger); }
+    .legend-dot.medium { background: var(--warn); }
+    .legend-dot.low { background: var(--safe); }
+    .legend-line {
+      width: 22px;
+      height: 4px;
+      border-radius: 999px;
+      background: #2378ff;
+      flex: 0 0 auto;
+    }
+
     .map {
       position: absolute;
       inset: 0;
@@ -406,6 +468,8 @@
       .sidebar, .details { border: 0; }
       .map-wrap { min-height: 620px; order: -1; }
       .topbar { top: 10px; left: 10px; right: 10px; }
+      .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .legend { grid-column: 1 / -1; }
       .row, .mode-grid, .device-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -494,6 +558,18 @@
       </div>
 
       <div class="map" id="map"></div>
+      <div class="map-tools" aria-label="地図操作">
+        <button class="map-tool" type="button" data-map-action="prefecture">香川県全体</button>
+        <button class="map-tool" type="button" data-map-action="hazards">危険ピン</button>
+        <button class="map-tool" type="button" data-map-action="destination">目的地</button>
+        <button class="map-tool" type="button" data-map-action="current">現在地</button>
+        <div class="legend" aria-label="凡例">
+          <div class="legend-row"><span class="legend-dot high"></span><span>危険</span></div>
+          <div class="legend-row"><span class="legend-dot medium"></span><span>注意</span></div>
+          <div class="legend-row"><span class="legend-dot low"></span><span>少し注意</span></div>
+          <div class="legend-row"><span class="legend-line"></span><span>案内ルート</span></div>
+        </div>
+      </div>
       <div class="map-note">香川県全体の地図を表示しています。ピンは試作品用のサンプル危険情報です。</div>
 
       <div class="alert hidden" id="alertBox">
@@ -557,6 +633,7 @@
     const guideButton = document.querySelector("#guideButton");
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
+    const mapTools = document.querySelector(".map-tools");
     const routeButton = document.querySelector("#routeButton");
     const routeStatus = document.querySelector("#routeStatus");
     const alertBox = document.querySelector("#alertBox");
@@ -693,7 +770,10 @@
       selectedId = id;
       const hazard = hazards.find((item) => item.id === id);
       render();
-      if (hazard) showAlert(hazard);
+      if (hazard) {
+        realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), 12));
+        showAlert(hazard);
+      }
     }
 
     function showAlert(hazard) {
@@ -878,6 +958,60 @@
       `;
     }
 
+    function focusDestination() {
+      const destination = destinations[destinationInput.value];
+      if (!destination) return;
+      const destinationLatLng = [destination.lat, destination.lng];
+
+      if (destinationMarker) destinationMarker.remove();
+      destinationMarker = L.marker(destinationLatLng, {
+        icon: L.divIcon({
+          className: "",
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          html: '<div class="destination-marker"><span>着</span></div>'
+        })
+      }).addTo(realMap);
+      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
+
+      realMap.setView(destinationLatLng, 12);
+      routeStatus.textContent = `${destination.name}を表示中`;
+    }
+
+    function focusHazards() {
+      const relevantHazards = hazards.filter((hazard) => isRelevant(hazard));
+      const points = relevantHazards.length ? relevantHazards : hazards;
+      realMap.fitBounds(points.map((hazard) => [hazard.lat, hazard.lng]), { padding: [70, 70] });
+      routeStatus.textContent = `${points.length}件の危険ピンを表示中`;
+    }
+
+    function handleMapTool(action) {
+      if (action === "prefecture") {
+        realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
+        routeStatus.textContent = "香川県全体を表示中";
+        return;
+      }
+
+      if (action === "hazards") {
+        focusHazards();
+        return;
+      }
+
+      if (action === "destination") {
+        focusDestination();
+        return;
+      }
+
+      if (action === "current") {
+        if (currentLatLng) {
+          realMap.setView(currentLatLng, Math.max(realMap.getZoom(), 12));
+          locationStatus.textContent = "現在地を表示中";
+        } else {
+          showCurrentLocation();
+        }
+      }
+    }
+
     function drawSafeRoute() {
       if (safeRouteLine) safeRouteLine.remove();
       safeRouteLine = L.polyline(safeRoutePoints, {
@@ -898,9 +1032,15 @@
     });
 
     addButton.addEventListener("click", addHazard);
+    destinationInput.addEventListener("change", focusDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
     routeButton.addEventListener("click", recalcRoute);
+    mapTools.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-map-action]");
+      if (!button) return;
+      handleMapTool(button.dataset.mapAction);
+    });
 
     render();
   </script>
