@@ -673,9 +673,7 @@
     let pendingGuide = false;
     const realMap = L.map(map, {
       zoomControl: true,
-      scrollWheelZoom: true,
-      maxBounds: kagawaBounds,
-      maxBoundsViscosity: 0.75
+      scrollWheelZoom: true
     }).setView(kagawaCenter, 9);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -827,6 +825,14 @@
         && lng >= kagawaBounds[0][1] && lng <= kagawaBounds[1][1];
     }
 
+    function focusCurrentLocation() {
+      if (!currentLatLng) return;
+      realMap.setView(currentLatLng, 15);
+      locationStatus.textContent = isInKagawa(currentLatLng[0], currentLatLng[1])
+        ? "現在地を表示中"
+        : "現在地を表示中（香川県外）";
+    }
+
     function showCurrentLocation() {
       if (!navigator.geolocation) {
         locationStatus.textContent = "この端末では現在地を取得できません";
@@ -863,13 +869,7 @@
         }).addTo(realMap);
         currentLocationMarker.bindTooltip("現在地", { direction: "top", offset: [0, -14] });
 
-        if (isInKagawa(latitude, longitude)) {
-          realMap.setView(latlng, Math.max(realMap.getZoom(), 12));
-          locationStatus.textContent = "現在地を表示中";
-        } else {
-          realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
-          locationStatus.textContent = "現在地は香川県の表示範囲外です";
-        }
+        focusCurrentLocation();
         locationButton.disabled = false;
         locationButton.textContent = "現在地を表示";
         if (pendingGuide) {
@@ -1004,8 +1004,7 @@
 
       if (action === "current") {
         if (currentLatLng) {
-          realMap.setView(currentLatLng, Math.max(realMap.getZoom(), 12));
-          locationStatus.textContent = "現在地を表示中";
+          focusCurrentLocation();
         } else {
           showCurrentLocation();
         }
