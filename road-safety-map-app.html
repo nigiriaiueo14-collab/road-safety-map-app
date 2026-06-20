@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>道路の凸凹を伝えるアプリ</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     :root {
       --ink: #202427;
@@ -152,10 +153,7 @@
       position: relative;
       min-width: 0;
       overflow: hidden;
-      background:
-        linear-gradient(90deg, transparent 0 44px, rgba(47, 111, 199, 0.08) 44px 48px, transparent 48px 92px),
-        linear-gradient(transparent 0 44px, rgba(47, 111, 199, 0.08) 44px 48px, transparent 48px 92px),
-        #e7eef2;
+      background: #dce8ee;
     }
 
     .topbar {
@@ -163,7 +161,7 @@
       top: 16px;
       left: 16px;
       right: 16px;
-      z-index: 3;
+      z-index: 1000;
       display: flex;
       gap: 10px;
       align-items: center;
@@ -204,41 +202,18 @@
       min-height: 100vh;
     }
 
-    .road {
-      position: absolute;
-      border-radius: 999px;
-      background: #fff;
-      box-shadow: inset 0 0 0 2px rgba(32, 36, 39, 0.07);
+    .leaflet-container {
+      font-family: inherit;
+      background: #dce8ee;
     }
 
-    .main-h { left: -8%; right: -8%; top: 45%; height: 92px; transform: rotate(-6deg); }
-    .main-v { left: 49%; top: -12%; width: 88px; height: 126%; transform: rotate(13deg); }
-    .sub-h { left: 4%; right: 8%; top: 67%; height: 58px; transform: rotate(2deg); background: #f9fbfc; }
-    .sub-v { left: 23%; top: -6%; width: 54px; height: 112%; transform: rotate(-4deg); background: #f9fbfc; }
-
-    .safe-route {
-      position: absolute;
-      left: 15%;
-      top: 23%;
-      width: 65%;
-      height: 51%;
-      border: 8px solid transparent;
-      border-left-color: var(--safe);
-      border-bottom-color: var(--safe);
-      border-radius: 0 0 0 120px;
-      transform: rotate(-8deg);
-      filter: drop-shadow(0 6px 10px rgba(29, 143, 116, 0.25));
-      opacity: 0.92;
-    }
-
-    .pin {
-      position: absolute;
+    .hazard-marker {
       width: 42px;
       height: 42px;
       display: grid;
       place-items: center;
       border-radius: 50% 50% 50% 8px;
-      transform: translate(-50%, -50%) rotate(-45deg);
+      transform: rotate(-45deg);
       color: #fff;
       font-weight: 900;
       border: 3px solid #fff;
@@ -246,12 +221,13 @@
       transition: transform 0.18s ease, opacity 0.18s ease;
     }
 
-    .pin span { transform: rotate(45deg); }
-    .pin:hover, .pin.selected { transform: translate(-50%, -56%) rotate(-45deg) scale(1.08); z-index: 2; }
-    .pin.low { background: var(--safe); }
-    .pin.medium { background: var(--warn); }
-    .pin.high { background: var(--danger); }
-    .pin.dimmed { opacity: 0.25; }
+    .hazard-marker span { transform: rotate(45deg); }
+    .hazard-marker:hover,
+    .hazard-marker.selected { transform: rotate(-45deg) scale(1.08); }
+    .hazard-marker.low { background: var(--safe); }
+    .hazard-marker.medium { background: var(--warn); }
+    .hazard-marker.high { background: var(--danger); }
+    .hazard-marker.dimmed { opacity: 0.35; }
 
     .route-point {
       position: absolute;
@@ -270,7 +246,7 @@
       position: absolute;
       left: 50%;
       bottom: 24px;
-      z-index: 4;
+      z-index: 1000;
       width: min(560px, calc(100% - 32px));
       transform: translateX(-50%);
       padding: 13px 16px;
@@ -334,6 +310,22 @@
       border-radius: 8px;
       background: var(--warn-soft);
       border: 1px solid rgba(227, 107, 44, 0.28);
+    }
+
+    .map-note {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 1000;
+      max-width: min(360px, calc(100% - 32px));
+      padding: 10px 12px;
+      border-radius: 8px;
+      color: #44515a;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
+      font-size: 12px;
+      line-height: 1.55;
     }
 
     .device-grid {
@@ -437,15 +429,8 @@
         <button class="secondary" type="button" id="routeButton">安全ルートを再計算</button>
       </div>
 
-      <div class="map" id="map">
-        <div class="road main-h"></div>
-        <div class="road main-v"></div>
-        <div class="road sub-h"></div>
-        <div class="road sub-v"></div>
-        <div class="safe-route"></div>
-        <span class="route-point start" title="出発地"></span>
-        <span class="route-point goal" title="目的地"></span>
-      </div>
+      <div class="map" id="map"></div>
+      <div class="map-note">香川県高松市周辺の実地図を表示しています。ピンは試作品用のサンプル危険情報です。</div>
 
       <div class="alert hidden" id="alertBox">
         <strong id="alertTitle"></strong>
@@ -468,12 +453,14 @@
     </aside>
   </main>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const defaultHazards = [
-      { id: "h1", place: "図書館前の歩道", type: "段差", level: "high", note: "横断歩道へ降りる部分に大きめの段差があります。", x: 52, y: 42, targets: ["wheelchair", "stroller"] },
-      { id: "h2", place: "公園横の細い道", type: "凸凹", level: "medium", note: "木の根で舗装が盛り上がっています。", x: 28, y: 66, targets: ["stroller"] },
-      { id: "h3", place: "駅前通り", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", x: 68, y: 51, targets: ["wheelchair", "stroller"] },
-      { id: "h4", place: "商店街入口", type: "狭い道", level: "low", note: "看板が出ている時間帯は通りにくくなります。", x: 39, y: 28, targets: ["wheelchair"] }
+      { id: "h1", place: "高松駅前の歩道", type: "段差", level: "high", note: "駅前広場から横断歩道へ向かう部分に段差があります。", lat: 34.3506, lng: 134.0467, targets: ["wheelchair", "stroller"] },
+      { id: "h2", place: "栗林公園北口付近", type: "凸凹", level: "medium", note: "歩道の一部に木の根による盛り上がりがあります。", lat: 34.3312, lng: 134.0444, targets: ["stroller"] },
+      { id: "h3", place: "瓦町駅周辺", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", lat: 34.3381, lng: 134.0528, targets: ["wheelchair", "stroller"] },
+      { id: "h4", place: "高松丸亀町商店街付近", type: "狭い道", level: "low", note: "時間帯によって人通りが多く、通りにくくなります。", lat: 34.3431, lng: 134.0508, targets: ["wheelchair"] },
+      { id: "h5", place: "玉藻公園入口付近", type: "急な坂", level: "medium", note: "入口近くに傾斜があり、車いすでは押す力が必要です。", lat: 34.3501, lng: 134.0509, targets: ["wheelchair"] }
     ];
 
     const labels = { wheelchair: "車いす", stroller: "ベビーカー", low: "少し注意", medium: "注意", high: "危険" };
@@ -490,11 +477,32 @@
     const alertBox = document.querySelector("#alertBox");
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
-    const storageKey = "road-safety-hazards";
+    const storageKey = "road-safety-hazards-kagawa";
+    const kagawaCenter = [34.3401, 134.0434];
+    const safeRoutePoints = [
+      [34.3506, 134.0467],
+      [34.3465, 134.0479],
+      [34.3431, 134.0508],
+      [34.3381, 134.0528],
+      [34.3312, 134.0444]
+    ];
 
     let mode = "wheelchair";
     let selectedId = null;
     let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
+    let markers = [];
+    let safeRouteLine;
+    const realMap = L.map(map, {
+      zoomControl: true,
+      scrollWheelZoom: true
+    }).setView(kagawaCenter, 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(realMap);
+
+    drawSafeRoute();
 
     function saveHazards() {
       localStorage.setItem(storageKey, JSON.stringify(hazards));
@@ -515,19 +523,21 @@
     }
 
     function renderPins() {
-      map.querySelectorAll(".pin").forEach((pin) => pin.remove());
+      markers.forEach((marker) => marker.remove());
+      markers = [];
       hazards.forEach((hazard) => {
-        const pin = document.createElement("button");
-        pin.type = "button";
-        pin.className = `pin ${hazard.level}`;
-        pin.classList.toggle("dimmed", !isRelevant(hazard));
-        pin.classList.toggle("selected", selectedId === hazard.id);
-        pin.style.left = `${hazard.x}%`;
-        pin.style.top = `${hazard.y}%`;
-        pin.setAttribute("aria-label", `${hazard.place} ${hazard.type}`);
-        pin.innerHTML = `<span>${symbols[hazard.type] || "!"}</span>`;
-        pin.addEventListener("click", () => selectHazard(hazard.id));
-        map.append(pin);
+        const marker = L.marker([hazard.lat, hazard.lng], {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [42, 42],
+            iconAnchor: [21, 42],
+            html: `<div class="hazard-marker ${hazard.level} ${isRelevant(hazard) ? "" : "dimmed"} ${selectedId === hazard.id ? "selected" : ""}"><span>${symbols[hazard.type] || "!"}</span></div>`
+          })
+        }).addTo(realMap);
+
+        marker.bindTooltip(`${hazard.place} / ${hazard.type}`, { direction: "top", offset: [0, -34] });
+        marker.on("click", () => selectHazard(hazard.id));
+        markers.push(marker);
       });
     }
 
@@ -604,8 +614,8 @@
         type,
         level,
         note,
-        x: 18 + Math.random() * 64,
-        y: 24 + Math.random() * 52,
+        lat: 34.322 + Math.random() * 0.04,
+        lng: 134.032 + Math.random() * 0.04,
         targets
       };
       hazards.unshift(hazard);
@@ -619,9 +629,21 @@
       const count = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
       routeStatus.textContent = `${count}件の危険を避けてルートを更新しました`;
       routeButton.textContent = "更新済み";
+      drawSafeRoute();
       window.setTimeout(() => {
         routeButton.textContent = "安全ルートを再計算";
       }, 1600);
+    }
+
+    function drawSafeRoute() {
+      if (safeRouteLine) safeRouteLine.remove();
+      safeRouteLine = L.polyline(safeRoutePoints, {
+        color: "#1d8f74",
+        weight: 7,
+        opacity: 0.86,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(realMap);
     }
 
     modeGrid.addEventListener("click", (event) => {
