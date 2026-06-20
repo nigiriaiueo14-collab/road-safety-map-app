@@ -46,6 +46,44 @@
       grid-template-columns: 320px minmax(0, 1fr) 360px;
     }
 
+    body:not(.logged-in) .app { display: none; }
+
+    .login-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    body.logged-in .login-screen { display: none; }
+
+    .login-panel {
+      width: min(430px, 100%);
+      padding: 24px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .login-panel h1 { font-size: 26px; }
+    .login-panel .lead { margin-bottom: 18px; }
+
+    .login-note {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .login-error {
+      min-height: 18px;
+      margin: 8px 0 0;
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
     .sidebar, .details {
       padding: 18px;
       background: rgba(255, 255, 255, 0.9);
@@ -201,6 +239,25 @@
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
+    }
+
+    .account-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .link-button {
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--line);
+      font-weight: 800;
     }
 
     .map-tools {
@@ -472,13 +529,36 @@
       .legend { grid-column: 1 / -1; }
       .row, .mode-grid, .device-grid { grid-template-columns: 1fr; }
     }
-  </style>
+</style>
 </head>
 <body>
+  <section class="login-screen" aria-label="ログイン画面">
+    <form class="login-panel" id="loginForm">
+      <h1>道路の凸凹を伝えるアプリ</h1>
+      <p class="lead">ログインして、危険情報の共有マップを開きます。</p>
+      <label>メールアドレス
+        <input id="emailInput" type="email" autocomplete="email" value="sample@example.com" required>
+      </label>
+      <label>パスワード
+        <input id="passwordInput" type="password" autocomplete="current-password" value="password" required>
+      </label>
+      <button class="primary" type="submit">ログイン</button>
+      <p class="login-error" id="loginError" aria-live="polite"></p>
+      <p class="login-note">試作品のため、入力内容は外部に送信されません。</p>
+    </form>
+  </section>
+
   <main class="app">
     <aside class="sidebar">
       <h1>道路の凸凹を伝えるアプリ</h1>
       <p class="lead">ベビーカーや車いすで移動する人が、道路の危険を共有して、危険の少ない道を選べるマップです。</p>
+      <section class="section">
+        <h2>アカウント</h2>
+        <div class="account-bar">
+          <span id="userLabel">ログイン中</span>
+          <button class="link-button" type="button" id="logoutButton">ログアウト</button>
+        </div>
+      </section>
 
       <section class="section">
         <h2>使う人</h2>
@@ -622,6 +702,12 @@
       tonosho: { name: "土庄港", lat: 34.4862, lng: 134.1856 }
     };
 
+    const loginForm = document.querySelector("#loginForm");
+    const emailInput = document.querySelector("#emailInput");
+    const passwordInput = document.querySelector("#passwordInput");
+    const loginError = document.querySelector("#loginError");
+    const userLabel = document.querySelector("#userLabel");
+    const logoutButton = document.querySelector("#logoutButton");
     const modeGrid = document.querySelector("#modeGrid");
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
@@ -671,6 +757,7 @@
     let guideRouteLine;
     let destinationMarker;
     let pendingGuide = false;
+    let isMapReady = false;
     const realMap = L.map(map, {
       zoomControl: true,
       scrollWheelZoom: true
@@ -684,6 +771,37 @@
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     drawSafeRoute();
+
+    function openApp(email) {
+      document.body.classList.add("logged-in");
+      userLabel.textContent = `${email} でログイン中`;
+      window.setTimeout(() => {
+        realMap.invalidateSize();
+        if (!isMapReady) {
+          realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
+          isMapReady = true;
+        }
+      }, 80);
+    }
+
+    function closeApp() {
+      document.body.classList.remove("logged-in");
+      passwordInput.value = "";
+      loginError.textContent = "";
+      emailInput.focus();
+    }
+
+    function handleLogin(event) {
+      event.preventDefault();
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      if (!email || !password) {
+        loginError.textContent = "メールアドレスとパスワードを入力してください。";
+        return;
+      }
+      loginError.textContent = "";
+      openApp(email);
+    }
 
     function saveHazards() {
       localStorage.setItem(storageKey, JSON.stringify(hazards));
@@ -1031,6 +1149,8 @@
     });
 
     addButton.addEventListener("click", addHazard);
+    loginForm.addEventListener("submit", handleLogin);
+    logoutButton.addEventListener("click", closeApp);
     destinationInput.addEventListener("change", focusDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
