@@ -245,6 +245,22 @@
       box-shadow: 0 0 0 8px rgba(35, 120, 255, 0.22), 0 8px 18px rgba(35, 120, 255, 0.28);
     }
 
+    .destination-marker {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 50% 50% 50% 8px;
+      transform: rotate(-45deg);
+      color: #fff;
+      font-weight: 900;
+      background: #5b4df5;
+      border: 3px solid #fff;
+      box-shadow: 0 10px 22px rgba(91, 77, 245, 0.26);
+    }
+
+    .destination-marker span { transform: rotate(45deg); }
+
     .route-point {
       position: absolute;
       width: 18px;
@@ -328,6 +344,19 @@
       border: 1px solid rgba(227, 107, 44, 0.28);
     }
 
+    .guide-panel {
+      display: grid;
+      gap: 8px;
+      padding: 13px;
+      border-radius: 8px;
+      background: #eef5ff;
+      border: 1px solid rgba(35, 120, 255, 0.22);
+    }
+
+    .guide-panel strong { color: var(--ink); }
+    .guide-panel ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .guide-panel p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
     .map-note {
       position: absolute;
       left: 16px;
@@ -402,6 +431,21 @@
       </section>
 
       <section class="section">
+        <h2>行き先を設定</h2>
+        <label>行きたい場所
+          <select id="destinationInput">
+            <option value="takamatsu">高松駅</option>
+            <option value="marugame">丸亀駅</option>
+            <option value="sakaide">坂出駅</option>
+            <option value="kanonji">観音寺駅</option>
+            <option value="shido">志度駅</option>
+            <option value="tonosho">土庄港</option>
+          </select>
+        </label>
+        <button class="primary" type="button" id="guideButton">現在地からルート案内</button>
+      </section>
+
+      <section class="section">
         <h2>危険を投稿</h2>
         <label>場所の名前<input id="placeInput" maxlength="24" value="駅前通りの歩道"></label>
         <div class="row">
@@ -460,6 +504,13 @@
 
     <aside class="details">
       <section class="section summary">
+        <h2>ルート案内</h2>
+        <div class="guide-panel" id="guidePreview">
+          <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
+        </div>
+      </section>
+
+      <section class="section summary">
         <h2>選択中の危険</h2>
         <div class="danger-preview" id="selectedPreview">
           <p>マップのピン、または下の一覧を選ぶと詳細が出ます。</p>
@@ -486,13 +537,24 @@
 
     const labels = { wheelchair: "車いす", stroller: "ベビーカー", low: "少し注意", medium: "注意", high: "危険" };
     const symbols = { "凸凹": "凸", "段差": "段", "舗装はがれ": "割", "急な坂": "坂", "狭い道": "狭" };
+    const destinations = {
+      takamatsu: { name: "高松駅", lat: 34.3506, lng: 134.0467 },
+      marugame: { name: "丸亀駅", lat: 34.2919, lng: 133.7931 },
+      sakaide: { name: "坂出駅", lat: 34.3129, lng: 133.8569 },
+      kanonji: { name: "観音寺駅", lat: 34.1236, lng: 133.6555 },
+      shido: { name: "志度駅", lat: 34.3214, lng: 134.1735 },
+      tonosho: { name: "土庄港", lat: 34.4862, lng: 134.1856 }
+    };
 
     const modeGrid = document.querySelector("#modeGrid");
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
+    const guidePreview = document.querySelector("#guidePreview");
     const addButton = document.querySelector("#addButton");
+    const destinationInput = document.querySelector("#destinationInput");
+    const guideButton = document.querySelector("#guideButton");
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
     const routeButton = document.querySelector("#routeButton");
@@ -525,9 +587,13 @@
     let selectedId = null;
     let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
     let markers = [];
+    let currentLatLng;
     let currentLocationMarker;
     let currentAccuracyCircle;
     let safeRouteLine;
+    let guideRouteLine;
+    let destinationMarker;
+    let pendingGuide = false;
     const realMap = L.map(map, {
       zoomControl: true,
       scrollWheelZoom: true,
@@ -694,6 +760,7 @@
       navigator.geolocation.getCurrentPosition((position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const latlng = [latitude, longitude];
+        currentLatLng = latlng;
 
         if (currentLocationMarker) currentLocationMarker.remove();
         if (currentAccuracyCircle) currentAccuracyCircle.remove();
@@ -725,6 +792,10 @@
         }
         locationButton.disabled = false;
         locationButton.textContent = "現在地を表示";
+        if (pendingGuide) {
+          pendingGuide = false;
+          startRouteGuide();
+        }
       }, (error) => {
         const messages = {
           1: "位置情報の許可が必要です",
@@ -734,11 +805,77 @@
         locationStatus.textContent = messages[error.code] || "現在地を取得できませんでした";
         locationButton.disabled = false;
         locationButton.textContent = "現在地を表示";
+        pendingGuide = false;
       }, {
         enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 30000
       });
+    }
+
+    function getDistanceKm(from, to) {
+      const start = L.latLng(from[0], from[1]);
+      const goal = L.latLng(to[0], to[1]);
+      return start.distanceTo(goal) / 1000;
+    }
+
+    function buildGuideRoute(from, to) {
+      const midLat = (from[0] + to[0]) / 2 + 0.018;
+      const midLng = (from[1] + to[1]) / 2 - 0.012;
+      return [from, [midLat, midLng], to];
+    }
+
+    function startRouteGuide() {
+      const destination = destinations[destinationInput.value];
+      if (!destination) return;
+
+      if (!currentLatLng) {
+        guidePreview.innerHTML = "<p>現在地を取得してから、選んだ目的地までのルートを表示します。</p>";
+        locationStatus.textContent = "ルート案内のため現在地を確認中";
+        pendingGuide = true;
+        showCurrentLocation();
+        return;
+      }
+
+      const destinationLatLng = [destination.lat, destination.lng];
+      const guidePoints = buildGuideRoute(currentLatLng, destinationLatLng);
+
+      if (guideRouteLine) guideRouteLine.remove();
+      if (destinationMarker) destinationMarker.remove();
+
+      guideRouteLine = L.polyline(guidePoints, {
+        color: "#2378ff",
+        weight: 8,
+        opacity: 0.9,
+        dashArray: "12 10",
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(realMap);
+
+      destinationMarker = L.marker(destinationLatLng, {
+        icon: L.divIcon({
+          className: "",
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          html: '<div class="destination-marker"><span>着</span></div>'
+        })
+      }).addTo(realMap);
+      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
+
+      const distance = getDistanceKm(currentLatLng, destinationLatLng);
+      const dangerCount = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
+      realMap.fitBounds([currentLatLng, destinationLatLng], { padding: [80, 80] });
+      routeStatus.textContent = `${destination.name}までのルートを表示中`;
+      guidePreview.innerHTML = `
+        <strong>現在地から${destination.name}まで</strong>
+        <p>直線距離の目安は約${distance.toFixed(1)}kmです。危険情報を確認しながら進めるルートを表示しています。</p>
+        <ol>
+          <li>青い線に沿って目的地方面へ進みます。</li>
+          <li>近くの危険ピンを確認し、段差や凸凹を避けます。</li>
+          <li>目的地の「着」マークを目指します。</li>
+        </ol>
+        <p>現在の設定では${dangerCount}件の注意地点を考慮しています。</p>
+      `;
     }
 
     function drawSafeRoute() {
@@ -761,6 +898,7 @@
     });
 
     addButton.addEventListener("click", addHazard);
+    guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
     routeButton.addEventListener("click", recalcRoute);
 
