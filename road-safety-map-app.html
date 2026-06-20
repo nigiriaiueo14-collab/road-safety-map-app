@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>道路の凸凹を伝えるアプリ</title>
+  <style>
+    :root {
+      --ink: #202427;
+      --muted: #667077;
+      --line: #d8e0e4;
+      --panel: #ffffff;
+      --bg: #eef3f5;
+      --safe: #1d8f74;
+      --safe-soft: #dff4ec;
+      --warn: #e36b2c;
+      --warn-soft: #fff0e8;
+      --danger: #c83e46;
+      --danger-soft: #ffe8ea;
+      --blue: #2f6fc7;
+      --blue-soft: #e8f0ff;
+      --shadow: 0 16px 38px rgba(32, 36, 39, 0.13);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(32, 36, 39, 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(32, 36, 39, 0.04) 1px, transparent 1px),
+        var(--bg);
+      background-size: 44px 44px;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { border: 0; cursor: pointer; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 360px;
+    }
+
+    .sidebar, .details {
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.9);
+      border-right: 1px solid var(--line);
+      overflow: auto;
+    }
+
+    .details {
+      border-right: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      line-height: 1.35;
+    }
+
+    .lead {
+      margin: 8px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .section {
+      padding: 15px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 8px 22px rgba(32, 36, 39, 0.06);
+    }
+
+    .mode-grid, .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mode {
+      min-height: 78px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: #f8fafb;
+      text-align: left;
+      transition: border 0.18s ease, background 0.18s ease, transform 0.18s ease;
+    }
+
+    .mode strong, .mode span { display: block; }
+    .mode strong { margin-bottom: 4px; font-size: 14px; }
+    .mode span { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .mode.active {
+      border-color: var(--blue);
+      background: var(--blue-soft);
+      transform: translateY(-1px);
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px 11px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    textarea { min-height: 74px; resize: vertical; }
+
+    .primary, .secondary {
+      min-height: 42px;
+      padding: 0 14px;
+      border-radius: 7px;
+      font-weight: 700;
+    }
+
+    .primary {
+      width: 100%;
+      color: #fff;
+      background: var(--blue);
+      box-shadow: 0 8px 20px rgba(47, 111, 199, 0.22);
+    }
+
+    .secondary { color: var(--blue); background: var(--blue-soft); }
+
+    .map-wrap {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, transparent 0 44px, rgba(47, 111, 199, 0.08) 44px 48px, transparent 48px 92px),
+        linear-gradient(transparent 0 44px, rgba(47, 111, 199, 0.08) 44px 48px, transparent 48px 92px),
+        #e7eef2;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 3;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .status {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .map {
+      position: absolute;
+      inset: 0;
+      min-height: 100vh;
+    }
+
+    .road {
+      position: absolute;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: inset 0 0 0 2px rgba(32, 36, 39, 0.07);
+    }
+
+    .main-h { left: -8%; right: -8%; top: 45%; height: 92px; transform: rotate(-6deg); }
+    .main-v { left: 49%; top: -12%; width: 88px; height: 126%; transform: rotate(13deg); }
+    .sub-h { left: 4%; right: 8%; top: 67%; height: 58px; transform: rotate(2deg); background: #f9fbfc; }
+    .sub-v { left: 23%; top: -6%; width: 54px; height: 112%; transform: rotate(-4deg); background: #f9fbfc; }
+
+    .safe-route {
+      position: absolute;
+      left: 15%;
+      top: 23%;
+      width: 65%;
+      height: 51%;
+      border: 8px solid transparent;
+      border-left-color: var(--safe);
+      border-bottom-color: var(--safe);
+      border-radius: 0 0 0 120px;
+      transform: rotate(-8deg);
+      filter: drop-shadow(0 6px 10px rgba(29, 143, 116, 0.25));
+      opacity: 0.92;
+    }
+
+    .pin {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50% 50% 50% 8px;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      color: #fff;
+      font-weight: 900;
+      border: 3px solid #fff;
+      box-shadow: 0 10px 22px rgba(32, 36, 39, 0.24);
+      transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+
+    .pin span { transform: rotate(45deg); }
+    .pin:hover, .pin.selected { transform: translate(-50%, -56%) rotate(-45deg) scale(1.08); z-index: 2; }
+    .pin.low { background: var(--safe); }
+    .pin.medium { background: var(--warn); }
+    .pin.high { background: var(--danger); }
+    .pin.dimmed { opacity: 0.25; }
+
+    .route-point {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      border: 5px solid var(--safe);
+      box-shadow: 0 4px 12px rgba(29, 143, 116, 0.32);
+    }
+
+    .start { left: 12%; top: 72%; }
+    .goal { left: 77%; top: 25%; }
+
+    .alert {
+      position: absolute;
+      left: 50%;
+      bottom: 24px;
+      z-index: 4;
+      width: min(560px, calc(100% - 32px));
+      transform: translateX(-50%);
+      padding: 13px 16px;
+      border-radius: 8px;
+      color: #fff;
+      background: #202427;
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 4px;
+    }
+
+    .alert strong { font-size: 15px; }
+    .alert span { font-size: 13px; color: rgba(255, 255, 255, 0.78); }
+    .hidden { display: none; }
+
+    .list { display: grid; gap: 9px; }
+
+    .item {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      text-align: left;
+    }
+
+    .item.selected { border-color: var(--blue); background: var(--blue-soft); }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      min-height: 26px;
+      align-items: center;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.low { color: #11654f; background: var(--safe-soft); }
+    .badge.medium { color: #9b4318; background: var(--warn-soft); }
+    .badge.high { color: #8f2430; background: var(--danger-soft); }
+
+    .item p, .summary p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .danger-preview {
+      padding: 13px;
+      border-radius: 8px;
+      background: var(--warn-soft);
+      border: 1px solid rgba(227, 107, 44, 0.28);
+    }
+
+    .device-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .device {
+      min-height: 82px;
+      display: grid;
+      place-items: center;
+      gap: 4px;
+      padding: 9px 6px;
+      border-radius: 8px;
+      background: #f7fafb;
+      border: 1px solid var(--line);
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .device strong { display: block; color: var(--ink); font-size: 20px; }
+
+    @media (max-width: 1040px) {
+      .app { grid-template-columns: 300px 1fr; }
+      .details { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+      .map-wrap { min-height: 720px; }
+    }
+
+    @media (max-width: 760px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar, .details { border: 0; }
+      .map-wrap { min-height: 620px; order: -1; }
+      .topbar { top: 10px; left: 10px; right: 10px; }
+      .row, .mode-grid, .device-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <h1>道路の凸凹を伝えるアプリ</h1>
+      <p class="lead">ベビーカーや車いすで移動する人が、道路の危険を共有して、危険の少ない道を選べるマップです。</p>
+
+      <section class="section">
+        <h2>使う人</h2>
+        <div class="mode-grid" id="modeGrid">
+          <button class="mode active" type="button" data-mode="wheelchair">
+            <strong>車いす</strong>
+            <span>段差・急な坂・狭い歩道を強く警告</span>
+          </button>
+          <button class="mode" type="button" data-mode="stroller">
+            <strong>ベビーカー</strong>
+            <span>凸凹・砂利・横断のしにくさを強く警告</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>危険を投稿</h2>
+        <label>場所の名前<input id="placeInput" maxlength="24" value="駅前通りの歩道"></label>
+        <div class="row">
+          <label>種類
+            <select id="typeInput">
+              <option value="凸凹">凸凹</option>
+              <option value="段差">段差</option>
+              <option value="舗装はがれ">舗装はがれ</option>
+              <option value="急な坂">急な坂</option>
+              <option value="狭い道">狭い道</option>
+            </select>
+          </label>
+          <label>危険度
+            <select id="levelInput">
+              <option value="medium">注意</option>
+              <option value="high">危険</option>
+              <option value="low">少し注意</option>
+            </select>
+          </label>
+        </div>
+        <label>メモ<textarea id="noteInput">タイルが浮いていて、前輪が引っかかりやすいです。</textarea></label>
+        <button class="primary" type="button" id="addButton">この場所を共有</button>
+      </section>
+
+      <section class="section">
+        <h2>知らせ方</h2>
+        <div class="device-grid">
+          <div class="device"><strong>スマホ</strong>通知で知らせる</div>
+          <div class="device"><strong>時計</strong>振動で知らせる</div>
+          <div class="device"><strong>音声</strong>イヤホンで案内</div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="map-wrap" aria-label="危険共有マップ">
+      <div class="topbar">
+        <div class="status">
+          <span class="pill" id="profilePill">車いす向け</span>
+          <span id="routeStatus">危険の少ないルートを表示中</span>
+        </div>
+        <button class="secondary" type="button" id="routeButton">安全ルートを再計算</button>
+      </div>
+
+      <div class="map" id="map">
+        <div class="road main-h"></div>
+        <div class="road main-v"></div>
+        <div class="road sub-h"></div>
+        <div class="road sub-v"></div>
+        <div class="safe-route"></div>
+        <span class="route-point start" title="出発地"></span>
+        <span class="route-point goal" title="目的地"></span>
+      </div>
+
+      <div class="alert hidden" id="alertBox">
+        <strong id="alertTitle"></strong>
+        <span id="alertText"></span>
+      </div>
+    </section>
+
+    <aside class="details">
+      <section class="section summary">
+        <h2>選択中の危険</h2>
+        <div class="danger-preview" id="selectedPreview">
+          <p>マップのピン、または下の一覧を選ぶと詳細が出ます。</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>共有された危険</h2>
+        <div class="list" id="hazardList"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const defaultHazards = [
+      { id: "h1", place: "図書館前の歩道", type: "段差", level: "high", note: "横断歩道へ降りる部分に大きめの段差があります。", x: 52, y: 42, targets: ["wheelchair", "stroller"] },
+      { id: "h2", place: "公園横の細い道", type: "凸凹", level: "medium", note: "木の根で舗装が盛り上がっています。", x: 28, y: 66, targets: ["stroller"] },
+      { id: "h3", place: "駅前通り", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", x: 68, y: 51, targets: ["wheelchair", "stroller"] },
+      { id: "h4", place: "商店街入口", type: "狭い道", level: "low", note: "看板が出ている時間帯は通りにくくなります。", x: 39, y: 28, targets: ["wheelchair"] }
+    ];
+
+    const labels = { wheelchair: "車いす", stroller: "ベビーカー", low: "少し注意", medium: "注意", high: "危険" };
+    const symbols = { "凸凹": "凸", "段差": "段", "舗装はがれ": "割", "急な坂": "坂", "狭い道": "狭" };
+
+    const modeGrid = document.querySelector("#modeGrid");
+    const profilePill = document.querySelector("#profilePill");
+    const map = document.querySelector("#map");
+    const list = document.querySelector("#hazardList");
+    const selectedPreview = document.querySelector("#selectedPreview");
+    const addButton = document.querySelector("#addButton");
+    const routeButton = document.querySelector("#routeButton");
+    const routeStatus = document.querySelector("#routeStatus");
+    const alertBox = document.querySelector("#alertBox");
+    const alertTitle = document.querySelector("#alertTitle");
+    const alertText = document.querySelector("#alertText");
+    const storageKey = "road-safety-hazards";
+
+    let mode = "wheelchair";
+    let selectedId = null;
+    let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
+
+    function saveHazards() {
+      localStorage.setItem(storageKey, JSON.stringify(hazards));
+    }
+
+    function isRelevant(hazard) {
+      return hazard.targets.includes(mode);
+    }
+
+    function render() {
+      profilePill.textContent = `${labels[mode]}向け`;
+      document.querySelectorAll(".mode").forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === mode);
+      });
+      renderPins();
+      renderList();
+      renderSelected();
+    }
+
+    function renderPins() {
+      map.querySelectorAll(".pin").forEach((pin) => pin.remove());
+      hazards.forEach((hazard) => {
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = `pin ${hazard.level}`;
+        pin.classList.toggle("dimmed", !isRelevant(hazard));
+        pin.classList.toggle("selected", selectedId === hazard.id);
+        pin.style.left = `${hazard.x}%`;
+        pin.style.top = `${hazard.y}%`;
+        pin.setAttribute("aria-label", `${hazard.place} ${hazard.type}`);
+        pin.innerHTML = `<span>${symbols[hazard.type] || "!"}</span>`;
+        pin.addEventListener("click", () => selectHazard(hazard.id));
+        map.append(pin);
+      });
+    }
+
+    function renderList() {
+      list.innerHTML = "";
+      hazards
+        .slice()
+        .sort((a, b) => Number(isRelevant(b)) - Number(isRelevant(a)))
+        .forEach((hazard) => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "item";
+          item.classList.toggle("selected", selectedId === hazard.id);
+          item.innerHTML = `
+            <div class="item-head">
+              <strong>${hazard.place}</strong>
+              <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
+            </div>
+            <p>${hazard.type} / ${hazard.note}</p>
+            <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
+          `;
+          item.addEventListener("click", () => selectHazard(hazard.id));
+          list.append(item);
+        });
+    }
+
+    function renderSelected() {
+      const hazard = hazards.find((item) => item.id === selectedId);
+      if (!hazard) {
+        selectedPreview.innerHTML = "<p>マップのピン、または下の一覧を選ぶと詳細が出ます。</p>";
+        return;
+      }
+      const warning = isRelevant(hazard)
+        ? `${labels[mode]}では特に注意が必要です。`
+        : `${labels[mode]}では優先度は低めですが、通行時は確認してください。`;
+      selectedPreview.innerHTML = `
+        <div class="item-head">
+          <strong>${hazard.place}</strong>
+          <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
+        </div>
+        <p>${hazard.type}: ${hazard.note}</p>
+        <p>${warning}</p>
+      `;
+    }
+
+    function selectHazard(id) {
+      selectedId = id;
+      const hazard = hazards.find((item) => item.id === id);
+      render();
+      if (hazard) showAlert(hazard);
+    }
+
+    function showAlert(hazard) {
+      alertTitle.textContent = `${hazard.place}に${hazard.type}`;
+      alertText.textContent = isRelevant(hazard)
+        ? `${labels[mode]}向けに${labels[hazard.level]}として通知します。`
+        : "現在の使い方では低めに表示しています。";
+      alertBox.classList.remove("hidden");
+      window.clearTimeout(showAlert.timer);
+      showAlert.timer = window.setTimeout(() => alertBox.classList.add("hidden"), 3600);
+    }
+
+    function addHazard() {
+      const place = document.querySelector("#placeInput").value.trim() || "名前のない場所";
+      const type = document.querySelector("#typeInput").value;
+      const level = document.querySelector("#levelInput").value;
+      const note = document.querySelector("#noteInput").value.trim() || "詳しいメモはまだありません。";
+      const targets = type === "凸凹" || type === "舗装はがれ"
+        ? ["wheelchair", "stroller"]
+        : ["wheelchair"];
+      const hazard = {
+        id: `h${Date.now()}`,
+        place,
+        type,
+        level,
+        note,
+        x: 18 + Math.random() * 64,
+        y: 24 + Math.random() * 52,
+        targets
+      };
+      hazards.unshift(hazard);
+      selectedId = hazard.id;
+      saveHazards();
+      render();
+      showAlert(hazard);
+    }
+
+    function recalcRoute() {
+      const count = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
+      routeStatus.textContent = `${count}件の危険を避けてルートを更新しました`;
+      routeButton.textContent = "更新済み";
+      window.setTimeout(() => {
+        routeButton.textContent = "安全ルートを再計算";
+      }, 1600);
+    }
+
+    modeGrid.addEventListener("click", (event) => {
+      const button = event.target.closest(".mode");
+      if (!button) return;
+      mode = button.dataset.mode;
+      render();
+      recalcRoute();
+    });
+
+    addButton.addEventListener("click", addHazard);
+    routeButton.addEventListener("click", recalcRoute);
+
+    render();
+  </script>
+</body>
+</html>
