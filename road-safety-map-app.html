@@ -507,7 +507,6 @@
           </select>
         </label>
         <button class="primary" type="button" id="guideButton">現在地からルート案内</button>
-        <button class="secondary" type="button" id="googleMapsButton">Googleマップで開く</button>
       </section>
 
       <section class="section">
@@ -632,7 +631,6 @@
     const addButton = document.querySelector("#addButton");
     const destinationInput = document.querySelector("#destinationInput");
     const guideButton = document.querySelector("#guideButton");
-    const googleMapsButton = document.querySelector("#googleMapsButton");
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
     const mapTools = document.querySelector(".map-tools");
@@ -960,25 +958,6 @@
       `;
     }
 
-    function openGoogleMapsRoute() {
-      const destination = destinations[destinationInput.value];
-      if (!destination) return;
-
-      const params = new URLSearchParams({
-        api: "1",
-        destination: `${destination.lat},${destination.lng}`,
-        travelmode: "walking",
-        dir_action: "navigate"
-      });
-
-      if (currentLatLng) {
-        params.set("origin", `${currentLatLng[0]},${currentLatLng[1]}`);
-      }
-
-      window.open(`https://www.google.com/maps/dir/?${params.toString()}`, "_blank", "noopener");
-      routeStatus.textContent = `${destination.name}をGoogleマップで開きます`;
-    }
-
     function focusDestination() {
       const destination = destinations[destinationInput.value];
       if (!destination) return;
@@ -1054,7 +1033,6 @@
     addButton.addEventListener("click", addHazard);
     destinationInput.addEventListener("change", focusDestination);
     guideButton.addEventListener("click", startRouteGuide);
-    googleMapsButton.addEventListener("click", openGoogleMapsRoute);
     locationButton.addEventListener("click", showCurrentLocation);
     routeButton.addEventListener("click", recalcRoute);
     mapTools.addEventListener("click", (event) => {
