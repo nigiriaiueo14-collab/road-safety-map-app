@@ -628,12 +628,11 @@
       <div class="topbar">
         <div class="status">
           <span class="pill" id="profilePill">車いす向け</span>
-          <span id="routeStatus">危険の少ないルートを表示中</span>
+          <span id="routeStatus">危険ピンを表示中</span>
           <span id="locationStatus" aria-live="polite">現在地は未表示</span>
         </div>
         <div class="map-actions">
           <button class="secondary" type="button" id="locationButton">現在地を表示</button>
-          <button class="secondary" type="button" id="routeButton">安全ルートを再計算</button>
         </div>
       </div>
 
@@ -720,7 +719,6 @@
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
     const mapTools = document.querySelector(".map-tools");
-    const routeButton = document.querySelector("#routeButton");
     const routeStatus = document.querySelector("#routeStatus");
     const alertBox = document.querySelector("#alertBox");
     const alertTitle = document.querySelector("#alertTitle");
@@ -739,13 +737,6 @@
       [34.3214, 134.1735],
       [34.4862, 134.1856]
     ];
-    const safeRoutePoints = [
-      [34.3506, 134.0467],
-      [34.3129, 133.8569],
-      [34.2919, 133.7931],
-      [34.1275, 133.6614]
-    ];
-
     let mode = "wheelchair";
     let selectedId = null;
     let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
@@ -753,7 +744,6 @@
     let currentLatLng;
     let currentLocationMarker;
     let currentAccuracyCircle;
-    let safeRouteLine;
     let guideRouteLine;
     let destinationMarker;
     let pendingGuide = false;
@@ -769,8 +759,6 @@
     }).addTo(realMap);
 
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
-
-    drawSafeRoute();
 
     function openApp(email) {
       document.body.classList.add("logged-in");
@@ -930,12 +918,7 @@
 
     function recalcRoute() {
       const count = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
-      routeStatus.textContent = `${count}件の危険を避けてルートを更新しました`;
-      routeButton.textContent = "更新済み";
-      drawSafeRoute();
-      window.setTimeout(() => {
-        routeButton.textContent = "安全ルートを再計算";
-      }, 1600);
+      routeStatus.textContent = `${count}件の注意地点を表示中`;
     }
 
     function isInKagawa(lat, lng) {
@@ -1129,17 +1112,6 @@
       }
     }
 
-    function drawSafeRoute() {
-      if (safeRouteLine) safeRouteLine.remove();
-      safeRouteLine = L.polyline(safeRoutePoints, {
-        color: "#1d8f74",
-        weight: 7,
-        opacity: 0.86,
-        lineCap: "round",
-        lineJoin: "round"
-      }).addTo(realMap);
-    }
-
     modeGrid.addEventListener("click", (event) => {
       const button = event.target.closest(".mode");
       if (!button) return;
@@ -1154,7 +1126,6 @@
     destinationInput.addEventListener("change", focusDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
-    routeButton.addEventListener("click", recalcRoute);
     mapTools.addEventListener("click", (event) => {
       const button = event.target.closest("[data-map-action]");
       if (!button) return;
