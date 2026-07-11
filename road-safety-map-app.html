@@ -1753,6 +1753,15 @@
       return Math.max(2, Math.ceil(moveMinutes + delayMinutes));
     }
 
+    function formatTravelTime(totalMinutes, forSpeech = false) {
+      if (totalMinutes < 60) return `${totalMinutes}分`;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return forSpeech
+        ? `${hours}時間${minutes}分`
+        : `${hours}時間${String(minutes).padStart(2, "0")}分`;
+    }
+
     function getSpeedLabel() {
       const profile = travelProfiles[mode] || travelProfiles.wheelchair;
       return `${profile.label}・約${Math.round(profile.speedMps * 60)}m/分`;
@@ -2295,6 +2304,8 @@
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
 
       const minutes = getEstimatedMinutes(routeData.distanceKm, routeHazards);
+      const travelTimeText = formatTravelTime(minutes);
+      const travelTimeSpeech = formatTravelTime(minutes, true);
       const dangerCount = routeHazards.length;
       currentRoutePoints = routeData.points;
       renderList();
@@ -2313,7 +2324,7 @@
       currentRouteSpeech = [
         `${destination.name}まで、音声案内を始めます`,
         `${labels[mode]}で移動する想定です`,
-        `所要時間は、約${minutes}分。距離は、約${routeData.distanceKm.toFixed(1)}キロメートルです`,
+        `所要時間は、約${travelTimeSpeech}。距離は、約${routeData.distanceKm.toFixed(1)}キロメートルです`,
         ...stepItems.map((step, index) => `${index + 1}番です。${step}`)
       ];
       const routeNotice = routeChangedForSafety
@@ -2326,7 +2337,7 @@
               <strong>現在地から${destination.name}</strong>
               <p>${routeData.source}を使った案内</p>
             </div>
-            <div class="route-time">${minutes}分</div>
+            <div class="route-time">${travelTimeText}</div>
           </div>
           <div class="route-meta">
             <span class="route-chip">${labels[mode]}</span>
