@@ -1713,12 +1713,10 @@
     }
 
     function getAvoidanceCandidates(from, to, routeHazards) {
-      const routeCenter = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
       const hazardCenter = getHazardCenter(routeHazards);
       const startPoint = realMap.project(L.latLng(from[0], from[1]), 12);
       const endPoint = realMap.project(L.latLng(to[0], to[1]), 12);
-      const centerPoint = realMap.project(L.latLng(routeCenter[0], routeCenter[1]), 12);
-      const hazardPoint = realMap.project(L.latLng(hazardCenter[0], hazardCenter[1]), 12);
+      const centerPoint = realMap.project(L.latLng(hazardCenter[0], hazardCenter[1]), 12);
       const routeDx = endPoint.x - startPoint.x;
       const routeDy = endPoint.y - startPoint.y;
       const routeLength = Math.hypot(routeDx, routeDy) || 1;
@@ -1726,23 +1724,14 @@
         { x: -routeDy / routeLength, y: routeDx / routeLength },
         { x: routeDy / routeLength, y: -routeDx / routeLength }
       ];
-      const hazardVector = {
-        x: hazardPoint.x - centerPoint.x,
-        y: hazardPoint.y - centerPoint.y
-      };
-      const preferredSide = perpendiculars[0].x * hazardVector.x + perpendiculars[0].y * hazardVector.y > 0 ? 1 : 0;
-      const sideOrder = [perpendiculars[preferredSide], perpendiculars[1 - preferredSide]];
-      const routeDistanceKm = Math.max(getDistanceKm(from, to), 1);
-      const offsets = [
-        Math.min(Math.max(routeDistanceKm * 260, 900), 2200),
-        Math.min(Math.max(routeDistanceKm * 390, 1300), 3200),
-        Math.min(Math.max(routeDistanceKm * 520, 1800), 4300)
-      ];
+      const sideOrder = perpendiculars;
+      const metersPerPixel = 40075016.686 * Math.cos(hazardCenter[0] * Math.PI / 180) / (256 * (2 ** 12));
+      const offsets = [250, 450, 700];
       const candidates = [];
 
       sideOrder.forEach((side, sideIndex) => {
         offsets.forEach((offset, offsetIndex) => {
-          const offsetPixels = offset / 18;
+          const offsetPixels = offset / metersPerPixel;
           const raw = realMap.unproject(L.point(
             centerPoint.x + side.x * offsetPixels,
             centerPoint.y + side.y * offsetPixels
@@ -1757,31 +1746,68 @@
       return candidates;
     }
 
+    function getRouteHazardRisk(routeHazards) {
+      return routeHazards.reduce((total, hazard) => {
+        if (hazard.level === "high") return total + 3;
+        if (hazard.level === "medium") return total + 1;
+        return total;
+      }, 0);
+    }
+
+    function isReasonableDetour(candidateDistanceKm, baseDistanceKm) {
+      const maximumExtraKm = Math.min(0.8, Math.max(0.25, baseDistanceKm * 0.18));
+      return candidateDistanceKm <= baseDistanceKm + maximumExtraKm;
+    }
+
     async function selectSafestRoute(baseRoute, from, to, routeHazards) {
       const baseHazardCount = routeHazards.length;
       const candidates = getAvoidanceCandidates(from, to, routeHazards);
       let bestRoute = {
         ...baseRoute,
         hazardCount: baseHazardCount,
+        hazardRisk: getRouteHazardRisk(routeHazards),
         avoidedHazardCount: 0,
         changed: false,
         priority: 0
       };
+
+      const officialAlternatives = (baseRoute.alternatives || []).filter((route) => (
+        isReasonableDetour(route.distanceKm, baseRoute.distanceKm)
+      ));
+
+      officialAlternatives.forEach((route, index) => {
+        const alternativeHazards = findHazardsOnRoute(route.points);
+        const alternativeRisk = getRouteHazardRisk(alternativeHazards);
+        const hasLowerRisk = alternativeRisk < bestRoute.hazardRisk;
+        const sameRiskButShorter = alternativeRisk === bestRoute.hazardRisk && route.distanceKm < bestRoute.distanceKm;
+        if (hasLowerRisk || sameRiskButShorter) {
+          bestRoute = {
+            ...route,
+            hazardCount: alternativeHazards.length,
+            hazardRisk: alternativeRisk,
+            avoidedHazardCount: Math.max(0, baseHazardCount - alternativeHazards.length),
+            changed: true,
+            priority: index
+          };
+        }
+      });
 
       for (const candidate of candidates) {
         const roadCandidate = await fetchRoadRoute(from, to, [candidate.point]);
         if (!roadCandidate) continue;
         const candidateRoute = roadCandidate;
         const candidateHazards = findHazardsOnRoute(candidateRoute.points);
-        const candidateScore = candidateHazards.length * 100000 + candidateRoute.distanceKm * 100 + candidate.priority;
-        const bestScore = bestRoute.hazardCount * 100000 + bestRoute.distanceKm * 100 + bestRoute.priority;
-        const isNotTooLong = candidateRoute.distanceKm <= baseRoute.distanceKm * 1.65 + 0.8;
+        const candidateRisk = getRouteHazardRisk(candidateHazards);
+        const hasLowerRisk = candidateRisk < bestRoute.hazardRisk;
+        const sameRiskButShorter = candidateRisk === bestRoute.hazardRisk && candidateRoute.distanceKm < bestRoute.distanceKm;
+        const isNotTooLong = isReasonableDetour(candidateRoute.distanceKm, baseRoute.distanceKm);
 
-        if (isNotTooLong && candidateScore < bestScore) {
+        if (isNotTooLong && (hasLowerRisk || sameRiskButShorter)) {
           bestRoute = {
             ...candidateRoute,
             hazardCount: candidateHazards.length,
-            avoidedHazardCount: baseHazardCount,
+            hazardRisk: candidateRisk,
+            avoidedHazardCount: Math.max(0, baseHazardCount - candidateHazards.length),
             changed: true,
             priority: candidate.priority
           };
@@ -2022,14 +2048,15 @@
             const snappedRoute = await snapRoutePointsToRoad(routePoints, profile, maxSnapDistance);
             if (!snappedRoute) continue;
             const coords = snappedRoute.points.map((point) => `${point[1]},${point[0]}`).join(";");
-            const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true`;
+            const alternatives = viaPoints.length ? "false" : "3";
+            const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true&alternatives=${alternatives}`;
             const response = await fetch(url);
             if (!response.ok) continue;
             const data = await response.json();
-            const route = data.routes && data.routes[0];
-            if (data.code !== "Ok" || !route || !route.geometry || !route.geometry.coordinates) continue;
+            const routes = (data.routes || []).filter((route) => route.geometry && route.geometry.coordinates);
+            if (data.code !== "Ok" || !routes.length) continue;
 
-            return {
+            const parsedRoutes = routes.map((route) => ({
               distanceKm: route.distance / 1000,
               durationSeconds: route.duration,
               points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
@@ -2042,6 +2069,12 @@
                   .slice(0, 5);
                 return rawSteps.map((step, index) => formatRouteStep(step, index, rawSteps.length));
               })()
+            })).sort((a, b) => a.distanceKm - b.distanceKm);
+
+            const shortestRoute = parsedRoutes[0];
+            return {
+              ...shortestRoute,
+              alternatives: parsedRoutes.slice(1)
             };
           } catch (error) {
             // Try the next road-data strategy.
@@ -2090,10 +2123,12 @@
       let routeData = roadRoute;
       let routeHazards = findHazardsOnRoute(routeData.points);
       let avoidedHazardCount = 0;
+      let routeChangedForSafety = false;
 
       if (routeHazards.length >= 2) {
         const saferRoute = await selectSafestRoute(routeData, currentLatLng, destinationLatLng, routeHazards);
         avoidedHazardCount = saferRoute.avoidedHazardCount || 0;
+        routeChangedForSafety = Boolean(saferRoute.changed);
         routeData = saferRoute;
         routeHazards = findHazardsOnRoute(routeData.points);
       }
@@ -2133,7 +2168,7 @@
       currentRoutePoints = routeData.points;
       renderList();
       focusRouteOnMap(routeData.points);
-      routeStatus.textContent = avoidedHazardCount
+      routeStatus.textContent = routeChangedForSafety
         ? `${destination.name}まで迂回ルートを表示中`
         : isAutoReroute
           ? `${destination.name}までのルートを再計算しました`
@@ -2150,8 +2185,8 @@
         `所要時間は、約${minutes}分。距離は、約${routeData.distanceKm.toFixed(1)}キロメートルです`,
         ...stepItems.map((step, index) => `${index + 1}番です。${step}`)
       ];
-      const routeNotice = avoidedHazardCount
-        ? `<p class="route-notice">${avoidedHazardCount}件の危険ピンが重なったため、迂回ルートに変更しました。</p>`
+      const routeNotice = routeChangedForSafety
+        ? `<p class="route-notice">${avoidedHazardCount > 0 ? `${avoidedHazardCount}件の危険ピンを避け、` : "危険度の高い地点を避け、"}遠回りになりすぎない安全ルートに変更しました。</p>`
         : "";
       guidePreview.innerHTML = `
         <div class="route-summary">
