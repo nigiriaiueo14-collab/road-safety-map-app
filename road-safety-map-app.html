@@ -841,6 +841,20 @@
 
     const labels = { wheelchair: "車いす", stroller: "ベビーカー", low: "少し注意", medium: "注意", high: "危険" };
     const symbols = { "凸凹": "凸", "段差": "段", "舗装はがれ": "割", "急な坂": "坂", "狭い道": "狭" };
+    const travelProfiles = {
+      wheelchair: {
+        label: "車いす想定",
+        speedMps: 0.85,
+        baseDelayMinutes: 1,
+        hazardDelay: { high: 2.5, medium: 1.4, low: 0.5 }
+      },
+      stroller: {
+        label: "ベビーカー想定",
+        speedMps: 1.05,
+        baseDelayMinutes: 0.5,
+        hazardDelay: { high: 2, medium: 1.1, low: 0.4 }
+      }
+    };
     const destinations = {
       takamatsu: { name: "高松駅", lat: 34.3506, lng: 134.0467 },
       marugame: { name: "丸亀駅", lat: 34.2919, lng: 133.7931 },
@@ -1287,11 +1301,23 @@
       return start.distanceTo(goal) / 1000;
     }
 
-    function getEstimatedMinutes(distanceKm, durationSeconds) {
-      if (durationSeconds) return Math.max(1, Math.ceil(durationSeconds / 60));
-      const baseMinutes = Math.ceil((distanceKm / 4.2) * 60);
-      const cautionMinutes = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length * 2;
-      return Math.max(3, baseMinutes + cautionMinutes);
+    function getRouteDelayMinutes(routeHazards) {
+      const profile = travelProfiles[mode] || travelProfiles.wheelchair;
+      return routeHazards.reduce((total, hazard) => {
+        return total + (profile.hazardDelay[hazard.level] || 0);
+      }, profile.baseDelayMinutes);
+    }
+
+    function getEstimatedMinutes(distanceKm, routeHazards = []) {
+      const profile = travelProfiles[mode] || travelProfiles.wheelchair;
+      const moveMinutes = (distanceKm * 1000) / profile.speedMps / 60;
+      const delayMinutes = getRouteDelayMinutes(routeHazards);
+      return Math.max(2, Math.ceil(moveMinutes + delayMinutes));
+    }
+
+    function getSpeedLabel() {
+      const profile = travelProfiles[mode] || travelProfiles.wheelchair;
+      return `${profile.label}・約${Math.round(profile.speedMps * 60)}m/分`;
     }
 
     function buildGuideRoute(from, to) {
@@ -1734,7 +1760,7 @@
       }).addTo(realMap);
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
 
-      const minutes = getEstimatedMinutes(routeData.distanceKm, routeData.durationSeconds);
+      const minutes = getEstimatedMinutes(routeData.distanceKm, routeHazards);
       const dangerCount = routeHazards.length;
       currentRoutePoints = routeData.points;
       renderList();
@@ -1749,6 +1775,7 @@
       ];
       currentRouteSpeech = [
         `${destination.name}まで、音声案内を始めます`,
+        `${labels[mode]}で移動する想定です`,
         `所要時間は、約${minutes}分。距離は、約${routeData.distanceKm.toFixed(1)}キロメートルです`,
         ...stepItems.map((step, index) => `${index + 1}番です。${step}`)
       ];
@@ -1765,8 +1792,9 @@
             <div class="route-time">${minutes}分</div>
           </div>
           <div class="route-meta">
-            <span class="route-chip">徒歩</span>
+            <span class="route-chip">${labels[mode]}</span>
             <span>約${routeData.distanceKm.toFixed(1)}km</span>
+            <span>${getSpeedLabel()}</span>
             <span>${dangerCount}件の注意地点を確認</span>
           </div>
           <div class="voice-actions">
