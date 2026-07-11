@@ -46,6 +46,37 @@
       grid-template-columns: 320px minmax(0, 1fr) 360px;
     }
 
+    @media (min-width: 1041px) {
+      body.logged-in {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      .app {
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+      }
+
+      .sidebar, .details {
+        height: 100%;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+      }
+
+      .map-wrap {
+        height: 100%;
+        min-height: 0;
+      }
+
+      .map {
+        min-height: 0;
+      }
+    }
+
     body:not(.logged-in) .app { display: none; }
 
     .login-screen {
