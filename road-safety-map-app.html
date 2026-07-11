@@ -1222,31 +1222,133 @@
       });
     }
 
-    function getAvoidancePoint(from, to, routeHazards) {
-      const hazardCenter = routeHazards.reduce((center, hazard) => {
+    function clampToKagawa(point) {
+      return [
+        Math.max(kagawaBounds[0][0], Math.min(kagawaBounds[1][0], point[0])),
+        Math.max(kagawaBounds[0][1], Math.min(kagawaBounds[1][1], point[1]))
+      ];
+    }
+
+    function getRouteDistanceFromPoints(points) {
+      if (!points || points.length < 2) return 0;
+      let distanceKm = 0;
+      for (let i = 0; i < points.length - 1; i += 1) {
+        distanceKm += getDistanceKm(points[i], points[i + 1]);
+      }
+      return distanceKm;
+    }
+
+    function getHazardCenter(routeHazards) {
+      return routeHazards.reduce((center, hazard) => {
         center[0] += hazard.lat;
         center[1] += hazard.lng;
         return center;
       }, [0, 0]).map((value) => value / routeHazards.length);
-      const routeCenter = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
-      let awayLat = routeCenter[0] - hazardCenter[0];
-      let awayLng = routeCenter[1] - hazardCenter[1];
-      const length = Math.hypot(awayLat, awayLng) || 1;
-      awayLat /= length;
-      awayLng /= length;
-      if (Math.abs(awayLat) + Math.abs(awayLng) < 0.2) {
-        awayLat = 0.45;
-        awayLng = -0.55;
-      }
-      const detourSize = 0.075;
-      const lat = Math.max(kagawaBounds[0][0], Math.min(kagawaBounds[1][0], routeCenter[0] + awayLat * detourSize));
-      const lng = Math.max(kagawaBounds[0][1], Math.min(kagawaBounds[1][1], routeCenter[1] + awayLng * detourSize));
-      return [lat, lng];
     }
 
-    function buildAvoidanceRoute(from, to, routeHazards) {
-      const detour = getAvoidancePoint(from, to, routeHazards);
-      return [from, detour, to];
+    function getAvoidanceCandidates(from, to, routeHazards) {
+      const routeCenter = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+      const hazardCenter = getHazardCenter(routeHazards);
+      const startPoint = realMap.project(L.latLng(from[0], from[1]), 12);
+      const endPoint = realMap.project(L.latLng(to[0], to[1]), 12);
+      const centerPoint = realMap.project(L.latLng(routeCenter[0], routeCenter[1]), 12);
+      const hazardPoint = realMap.project(L.latLng(hazardCenter[0], hazardCenter[1]), 12);
+      const routeDx = endPoint.x - startPoint.x;
+      const routeDy = endPoint.y - startPoint.y;
+      const routeLength = Math.hypot(routeDx, routeDy) || 1;
+      const perpendiculars = [
+        { x: -routeDy / routeLength, y: routeDx / routeLength },
+        { x: routeDy / routeLength, y: -routeDx / routeLength }
+      ];
+      const hazardVector = {
+        x: hazardPoint.x - centerPoint.x,
+        y: hazardPoint.y - centerPoint.y
+      };
+      const preferredSide = perpendiculars[0].x * hazardVector.x + perpendiculars[0].y * hazardVector.y > 0 ? 1 : 0;
+      const sideOrder = [perpendiculars[preferredSide], perpendiculars[1 - preferredSide]];
+      const routeDistanceKm = Math.max(getDistanceKm(from, to), 1);
+      const offsets = [
+        Math.min(Math.max(routeDistanceKm * 260, 900), 2200),
+        Math.min(Math.max(routeDistanceKm * 390, 1300), 3200),
+        Math.min(Math.max(routeDistanceKm * 520, 1800), 4300)
+      ];
+      const candidates = [];
+
+      sideOrder.forEach((side, sideIndex) => {
+        offsets.forEach((offset, offsetIndex) => {
+          const offsetPixels = offset / 18;
+          const raw = realMap.unproject(L.point(
+            centerPoint.x + side.x * offsetPixels,
+            centerPoint.y + side.y * offsetPixels
+          ), 12);
+          candidates.push({
+            point: clampToKagawa([raw.lat, raw.lng]),
+            priority: sideIndex * 10 + offsetIndex
+          });
+        });
+      });
+
+      return candidates;
+    }
+
+    function buildAvoidanceRoute(from, to, candidatePoint) {
+      return [from, candidatePoint, to];
+    }
+
+    async function selectSafestRoute(baseRoute, from, to, routeHazards) {
+      const baseHazardCount = routeHazards.length;
+      const candidates = getAvoidanceCandidates(from, to, routeHazards);
+      let bestRoute = {
+        ...baseRoute,
+        hazardCount: baseHazardCount,
+        avoidedHazardCount: 0,
+        changed: false,
+        priority: 0
+      };
+
+      for (const candidate of candidates) {
+        const fallbackPoints = buildAvoidanceRoute(from, to, candidate.point);
+        const roadCandidate = await fetchRoadRoute(from, to, [candidate.point]);
+        const candidateRoute = roadCandidate || {
+          distanceKm: getRouteDistanceFromPoints(fallbackPoints),
+          durationSeconds: null,
+          points: fallbackPoints,
+          source: "迂回用の簡易ルート",
+          steps: [
+            "危険ピンが多い道を避けて、青いルートに沿って進みます。",
+            "迂回地点を通って、できるだけ危険の少ない道を選びます。",
+            "紫の「着」マークが目的地です。"
+          ]
+        };
+        const candidateHazards = findHazardsOnRoute(candidateRoute.points);
+        const candidateScore = candidateHazards.length * 100000 + candidateRoute.distanceKm * 100 + candidate.priority;
+        const bestScore = bestRoute.hazardCount * 100000 + bestRoute.distanceKm * 100 + bestRoute.priority;
+        const isNotTooLong = candidateRoute.distanceKm <= baseRoute.distanceKm * 1.65 + 0.8;
+
+        if (isNotTooLong && candidateScore < bestScore) {
+          bestRoute = {
+            ...candidateRoute,
+            hazardCount: candidateHazards.length,
+            avoidedHazardCount: baseHazardCount,
+            changed: true,
+            priority: candidate.priority
+          };
+        }
+      }
+
+      if (!bestRoute.changed) return bestRoute;
+      return {
+        ...bestRoute,
+        source: `${bestRoute.source}（危険ピンを回避）`,
+        steps: [
+          `${baseHazardCount}件の危険ピンがルート近くにあったため、より安全な候補を選びました。`,
+          ...(bestRoute.steps.length ? bestRoute.steps : [
+            "青いルートに沿って目的地方面へ進みます。",
+            "危険ピンの近くでは段差や凸凹を確認します。",
+            "紫の「着」マークが目的地です。"
+          ])
+        ].slice(0, 4)
+      };
     }
 
     function escapeHtml(text) {
@@ -1332,32 +1434,9 @@
       let avoidedHazardCount = 0;
 
       if (routeHazards.length >= 2) {
-        const avoidancePoint = getAvoidancePoint(currentLatLng, destinationLatLng, routeHazards);
-        const avoidanceRoute = await fetchRoadRoute(currentLatLng, destinationLatLng, [avoidancePoint]);
-        const avoidedRouteData = avoidanceRoute || {
-          distanceKm: getDistanceKm(currentLatLng, avoidancePoint) + getDistanceKm(avoidancePoint, destinationLatLng),
-          durationSeconds: null,
-          points: buildAvoidanceRoute(currentLatLng, destinationLatLng, routeHazards),
-          source: "迂回用の簡易ルート",
-          steps: [
-            "危険ピンが多い道を避けて、青いルートに沿って進みます。",
-            "迂回地点を通って、できるだけ危険の少ない道を選びます。",
-            "紫の「着」マークが目的地です。"
-          ]
-        };
-        avoidedHazardCount = routeHazards.length;
-        routeData = {
-          ...avoidedRouteData,
-          source: `${avoidedRouteData.source}（危険ピンを回避）`,
-          steps: [
-            `${avoidedHazardCount}件の危険ピンがルート近くにあったため、別のルートに変更しました。`,
-            ...(avoidedRouteData.steps.length ? avoidedRouteData.steps : [
-              "青いルートに沿って目的地方面へ進みます。",
-              "危険ピンの近くでは段差や凸凹を確認します。",
-              "紫の「着」マークが目的地です。"
-            ])
-          ].slice(0, 4)
-        };
+        const saferRoute = await selectSafestRoute(routeData, currentLatLng, destinationLatLng, routeHazards);
+        avoidedHazardCount = saferRoute.avoidedHazardCount || 0;
+        routeData = saferRoute;
         routeHazards = findHazardsOnRoute(routeData.points);
       }
 
