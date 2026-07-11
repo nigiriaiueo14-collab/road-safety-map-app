@@ -321,6 +321,13 @@
 
     .secondary { color: var(--blue); background: var(--blue-soft); }
 
+    #pickPlaceButton,
+    .hazard-cancel-button { width: 100%; }
+
+    .hazard-composer { margin-top: 9px; }
+    .hazard-composer[hidden], .hazard-details[hidden], .place-picking-help[hidden] { display: none; }
+    .hazard-cancel-button { margin-top: 8px; }
+
     .map-wrap {
       position: relative;
       min-width: 0;
@@ -926,28 +933,33 @@
       <section class="section">
         <h2>危険を投稿</h2>
         <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
-        <p class="helper-text">ボタンを押したあと、地図上の危険があった場所をクリックしてください。</p>
-        <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
-        <div class="row">
-          <label>種類
-            <select id="typeInput">
-              <option value="凸凹">凸凹</option>
-              <option value="段差">段差</option>
-              <option value="舗装はがれ">舗装はがれ</option>
-              <option value="急な坂">急な坂</option>
-              <option value="狭い道">狭い道</option>
-            </select>
-          </label>
-          <label>危険度
-            <select id="levelInput">
-              <option value="medium">注意</option>
-              <option value="high">危険</option>
-              <option value="low">少し注意</option>
-            </select>
-          </label>
+        <div class="hazard-composer" id="hazardComposer" hidden>
+          <p class="helper-text place-picking-help" id="placePickingHelp">地図上の危険があった場所をクリックしてください。</p>
+          <div class="hazard-details" id="hazardDetails" hidden>
+            <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
+            <div class="row">
+              <label>種類
+                <select id="typeInput">
+                  <option value="凸凹">凸凹</option>
+                  <option value="段差">段差</option>
+                  <option value="舗装はがれ">舗装はがれ</option>
+                  <option value="急な坂">急な坂</option>
+                  <option value="狭い道">狭い道</option>
+                </select>
+              </label>
+              <label>危険度
+                <select id="levelInput">
+                  <option value="medium">注意</option>
+                  <option value="high">危険</option>
+                  <option value="low">少し注意</option>
+                </select>
+              </label>
+            </div>
+            <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
+            <button class="primary" type="button" id="addButton">この場所を共有</button>
+          </div>
+          <button class="secondary hazard-cancel-button" type="button" id="cancelPlaceButton">キャンセル</button>
         </div>
-        <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
-        <button class="primary" type="button" id="addButton">この場所を共有</button>
       </section>
 
     </aside>
@@ -1115,6 +1127,10 @@
     const guidePreview = document.querySelector("#guidePreview");
     const addButton = document.querySelector("#addButton");
     const pickPlaceButton = document.querySelector("#pickPlaceButton");
+    const cancelPlaceButton = document.querySelector("#cancelPlaceButton");
+    const hazardComposer = document.querySelector("#hazardComposer");
+    const hazardDetails = document.querySelector("#hazardDetails");
+    const placePickingHelp = document.querySelector("#placePickingHelp");
     const selectedPlaceText = document.querySelector("#selectedPlaceText");
     const destinationInput = document.querySelector("#destinationInput");
     const destinationText = document.querySelector("#destinationText");
@@ -1153,14 +1169,6 @@
       [34.02, 133.43],
       [34.58, 134.45]
     ];
-    const sampleAreas = [
-      [34.3506, 134.0467],
-      [34.2919, 133.7931],
-      [34.3129, 133.8569],
-      [34.1275, 133.6614],
-      [34.3214, 134.1735],
-      [34.4862, 134.1856]
-    ];
     let mode = "wheelchair";
     let selectedId = null;
     let hazards = JSON.parse(localStorage.getItem(storageKey) || "null") || defaultHazards;
@@ -1178,6 +1186,7 @@
     let draftPlace;
     let draftMarker;
     let isPickingPlace = false;
+    let placePickRequestId = 0;
     let pendingGuide = false;
     let isMapReady = false;
     let currentUserEmail = "";
@@ -1210,6 +1219,7 @@
       settingsButton.title = "設定を開く";
       settingsPanel.hidden = true;
       detailsContent.hidden = false;
+      resetHazardPostForm(true);
       document.body.classList.add("logged-in");
       userLabel.textContent = isAdminUser() ? `${email} でログイン中（管理者）` : `${email} でログイン中`;
       startHazardSync();
@@ -1594,10 +1604,43 @@
       notifyNearbyHazard(nearest.hazard, nearest.distance);
     }
 
+    function resetHazardPostForm(clearInputs = true) {
+      placePickRequestId += 1;
+      isPickingPlace = false;
+      draftPlace = null;
+      realMap.getContainer().style.cursor = "";
+      if (draftMarker) {
+        draftMarker.remove();
+        draftMarker = null;
+      }
+      pickPlaceButton.hidden = false;
+      pickPlaceButton.disabled = false;
+      cancelPlaceButton.disabled = false;
+      pickPlaceButton.textContent = "地図で場所を選ぶ";
+      hazardComposer.hidden = true;
+      hazardDetails.hidden = true;
+      placePickingHelp.hidden = false;
+      placePickingHelp.textContent = "地図上の危険があった場所をクリックしてください。";
+      selectedPlaceText.textContent = "投稿場所はまだ選ばれていません。";
+      if (clearInputs) {
+        document.querySelector("#typeInput").value = "凸凹";
+        document.querySelector("#levelInput").value = "medium";
+        document.querySelector("#noteInput").value = "";
+      }
+    }
+
+    function cancelHazardPost() {
+      resetHazardPostForm(true);
+      routeStatus.textContent = "危険の投稿をキャンセルしました";
+    }
+
     function startPlacePicking() {
+      resetHazardPostForm(true);
       isPickingPlace = true;
+      hazardComposer.hidden = false;
       pickPlaceButton.textContent = "地図をクリックしてください";
-      selectedPlaceText.textContent = "道路上、または道路のすぐ近くをクリックしてください。";
+      pickPlaceButton.disabled = true;
+      placePickingHelp.textContent = "道路上、または道路のすぐ近くをクリックしてください。";
       routeStatus.textContent = "投稿する場所を地図で選択中";
       realMap.getContainer().style.cursor = "crosshair";
       if (realMap.getZoom() < hazardVisibleZoom) {
@@ -1629,11 +1672,13 @@
     }
 
     async function selectDraftPlace(latlng) {
-      selectedPlaceText.textContent = "道路上か確認しています。";
+      const requestId = ++placePickRequestId;
+      placePickingHelp.textContent = "道路上か確認しています。";
       routeStatus.textContent = "投稿場所を確認中";
       const roadCheck = await isRoadLikePlace(latlng);
+      if (!isPickingPlace || requestId !== placePickRequestId) return;
       if (!roadCheck.ok) {
-        selectedPlaceText.textContent = roadCheck.message;
+        placePickingHelp.textContent = roadCheck.message;
         routeStatus.textContent = "投稿できない場所です";
         return;
       }
@@ -1641,6 +1686,10 @@
       draftPlace = [latlng.lat, latlng.lng];
       isPickingPlace = false;
       pickPlaceButton.textContent = "地図で場所を選ぶ";
+      pickPlaceButton.disabled = false;
+      pickPlaceButton.hidden = true;
+      placePickingHelp.hidden = true;
+      hazardDetails.hidden = false;
       realMap.getContainer().style.cursor = "";
 
       if (draftMarker) draftMarker.remove();
@@ -1661,6 +1710,10 @@
     }
 
     async function addHazard() {
+      if (!draftPlace) {
+        routeStatus.textContent = "先に地図で投稿場所を選んでください";
+        return;
+      }
       const place = "投稿された場所";
       const type = document.querySelector("#typeInput").value;
       const level = document.querySelector("#levelInput").value;
@@ -1669,24 +1722,24 @@
       const exampleNote = "タイルが浮いていて、前輪が引っかかりやすいです。";
       if (!note || note === exampleNote) {
         routeStatus.textContent = "メモを入力してください";
-        selectedPlaceText.textContent = "例文ではなく、実際に見つけた危険のメモを入力してください。";
         noteInput.focus();
         return;
       }
       const targets = type === "凸凹" || type === "舗装はがれ"
         ? ["wheelchair", "stroller"]
         : ["wheelchair"];
-      const area = draftPlace || sampleAreas[Math.floor(Math.random() * sampleAreas.length)];
+      const area = draftPlace;
       const newHazard = {
         place,
         type,
         level,
         note,
-        lat: draftPlace ? area[0] : area[0] + (Math.random() - 0.5) * 0.035,
-        lng: draftPlace ? area[1] : area[1] + (Math.random() - 0.5) * 0.045,
+        lat: area[0],
+        lng: area[1],
         targets
       };
       addButton.disabled = true;
+      cancelPlaceButton.disabled = true;
       addButton.textContent = "共有中";
       const { data, error } = await supabaseClient
         .from("hazards")
@@ -1694,24 +1747,18 @@
         .select("id, place, type, level, note, lat, lng, targets, created_at")
         .single();
       addButton.disabled = false;
+      cancelPlaceButton.disabled = false;
       addButton.textContent = "この場所を共有";
 
       if (error || !data) {
         routeStatus.textContent = "危険ピンを共有できませんでした";
-        selectedPlaceText.textContent = "通信状態を確認して、もう一度投稿してください。";
         return;
       }
 
       const hazard = mapSharedHazard(data);
       hazards = [hazard, ...hazards.filter((item) => item.id !== hazard.id)];
       selectedId = hazard.id;
-      draftPlace = null;
-      if (draftMarker) {
-        draftMarker.remove();
-        draftMarker = null;
-      }
-      noteInput.value = "";
-      selectedPlaceText.textContent = "投稿場所はまだ選ばれていません。";
+      resetHazardPostForm(true);
       saveHazards();
       render();
       showAlert(hazard);
@@ -2662,6 +2709,7 @@
 
     addButton.addEventListener("click", addHazard);
     pickPlaceButton.addEventListener("click", startPlacePicking);
+    cancelPlaceButton.addEventListener("click", cancelHazardPost);
     selectedPreview.addEventListener("click", (event) => {
       const deleteButton = event.target.closest("[data-delete-hazard]");
       if (!deleteButton) return;
