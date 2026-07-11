@@ -465,16 +465,84 @@
 
     .guide-panel {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       padding: 13px;
       border-radius: 8px;
-      background: #eef5ff;
-      border: 1px solid rgba(35, 120, 255, 0.22);
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 22px rgba(32, 36, 39, 0.06);
     }
 
     .guide-panel strong { color: var(--ink); }
-    .guide-panel ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
     .guide-panel p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+    .route-summary {
+      display: grid;
+      gap: 8px;
+    }
+
+    .route-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .route-time {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 900;
+      color: #2378ff;
+    }
+
+    .route-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .route-chip {
+      min-height: 26px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    .route-steps {
+      display: grid;
+      gap: 10px;
+      margin: 2px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .route-steps li {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 9px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #2378ff;
+      font-weight: 900;
+      font-size: 13px;
+    }
 
     .map-note {
       position: absolute;
@@ -1000,6 +1068,12 @@
       return start.distanceTo(goal) / 1000;
     }
 
+    function getEstimatedMinutes(distanceKm) {
+      const baseMinutes = Math.ceil((distanceKm / 4.2) * 60);
+      const cautionMinutes = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length * 2;
+      return Math.max(3, baseMinutes + cautionMinutes);
+    }
+
     function buildGuideRoute(from, to) {
       const midLat = (from[0] + to[0]) / 2 + 0.018;
       const midLng = (from[1] + to[1]) / 2 - 0.012;
@@ -1021,17 +1095,28 @@
       const destinationLatLng = [destination.lat, destination.lng];
       const guidePoints = buildGuideRoute(currentLatLng, destinationLatLng);
 
-      if (guideRouteLine) guideRouteLine.remove();
+      if (guideRouteLine) {
+        if (guideRouteLine.backLine) guideRouteLine.backLine.remove();
+        guideRouteLine.remove();
+      }
       if (destinationMarker) destinationMarker.remove();
+
+      const routeBackLine = L.polyline(guidePoints, {
+        color: "#ffffff",
+        weight: 13,
+        opacity: 0.95,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(realMap);
 
       guideRouteLine = L.polyline(guidePoints, {
         color: "#2378ff",
         weight: 8,
-        opacity: 0.9,
-        dashArray: "12 10",
+        opacity: 0.95,
         lineCap: "round",
         lineJoin: "round"
       }).addTo(realMap);
+      guideRouteLine.backLine = routeBackLine;
 
       destinationMarker = L.marker(destinationLatLng, {
         icon: L.divIcon({
@@ -1044,18 +1129,30 @@
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
 
       const distance = getDistanceKm(currentLatLng, destinationLatLng);
+      const minutes = getEstimatedMinutes(distance);
       const dangerCount = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
       realMap.fitBounds([currentLatLng, destinationLatLng], { padding: [80, 80] });
       routeStatus.textContent = `${destination.name}までのルートを表示中`;
       guidePreview.innerHTML = `
-        <strong>現在地から${destination.name}まで</strong>
-        <p>直線距離の目安は約${distance.toFixed(1)}kmです。危険情報を確認しながら進めるルートを表示しています。</p>
-        <ol>
-          <li>青い線に沿って目的地方面へ進みます。</li>
-          <li>近くの危険ピンを確認し、段差や凸凹を避けます。</li>
-          <li>目的地の「着」マークを目指します。</li>
-        </ol>
-        <p>現在の設定では${dangerCount}件の注意地点を考慮しています。</p>
+        <div class="route-summary">
+          <div class="route-title">
+            <div>
+              <strong>現在地から${destination.name}</strong>
+              <p>歩きやすさを優先した案内</p>
+            </div>
+            <div class="route-time">${minutes}分</div>
+          </div>
+          <div class="route-meta">
+            <span class="route-chip">徒歩</span>
+            <span>約${distance.toFixed(1)}km</span>
+            <span>${dangerCount}件の注意地点を確認</span>
+          </div>
+        </div>
+        <ul class="route-steps">
+          <li><span class="step-icon">1</span><span>現在地から青いルートに沿って進みます。</span></li>
+          <li><span class="step-icon">2</span><span>危険ピンの近くでは段差や凸凹を確認します。</span></li>
+          <li><span class="step-icon">3</span><span>紫の「着」マークが目的地です。</span></li>
+        </ul>
       `;
     }
 
