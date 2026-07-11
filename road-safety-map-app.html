@@ -1386,6 +1386,22 @@
       }
     }
 
+    function focusRouteOnMap(points) {
+      if (!points || !points.length) return;
+      const routeBounds = L.latLngBounds(points);
+      const fitOptions = {
+        paddingTopLeft: [96, 120],
+        paddingBottomRight: [96, 120],
+        maxZoom: 15
+      };
+      realMap.invalidateSize();
+      realMap.fitBounds(routeBounds, { ...fitOptions, animate: true });
+      window.setTimeout(() => {
+        realMap.invalidateSize();
+        realMap.fitBounds(routeBounds, { ...fitOptions, animate: false });
+      }, 140);
+    }
+
     async function fetchRoadRoute(from, to, viaPoints = []) {
       const routePoints = [from, ...viaPoints, to];
       const coords = routePoints.map((point) => `${point[1]},${point[0]}`).join(";");
@@ -1490,7 +1506,7 @@
 
       const minutes = getEstimatedMinutes(routeData.distanceKm, routeData.durationSeconds);
       const dangerCount = routeHazards.length;
-      realMap.fitBounds(routeData.points, { padding: [80, 80] });
+      focusRouteOnMap(routeData.points);
       routeStatus.textContent = avoidedHazardCount
         ? `${destination.name}まで迂回ルートを表示中`
         : `${destination.name}までのルートを表示中`;
