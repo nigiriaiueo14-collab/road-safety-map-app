@@ -781,7 +781,7 @@
             </select>
           </label>
         </div>
-        <label>メモ<textarea id="noteInput">タイルが浮いていて、前輪が引っかかりやすいです。</textarea></label>
+        <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
         <button class="primary" type="button" id="addButton">この場所を共有</button>
       </section>
 
@@ -1283,7 +1283,15 @@
       const place = "投稿された場所";
       const type = document.querySelector("#typeInput").value;
       const level = document.querySelector("#levelInput").value;
-      const note = document.querySelector("#noteInput").value.trim() || "詳しいメモはまだありません。";
+      const noteInput = document.querySelector("#noteInput");
+      const note = noteInput.value.trim();
+      const exampleNote = "タイルが浮いていて、前輪が引っかかりやすいです。";
+      if (!note || note === exampleNote) {
+        routeStatus.textContent = "メモを入力してください";
+        selectedPlaceText.textContent = "例文ではなく、実際に見つけた危険のメモを入力してください。";
+        noteInput.focus();
+        return;
+      }
       const targets = type === "凸凹" || type === "舗装はがれ"
         ? ["wheelchair", "stroller"]
         : ["wheelchair"];
@@ -1305,6 +1313,7 @@
         draftMarker.remove();
         draftMarker = null;
       }
+      noteInput.value = "";
       selectedPlaceText.textContent = "投稿場所はまだ選ばれていません。";
       saveHazards();
       render();
