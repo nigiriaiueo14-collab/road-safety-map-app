@@ -792,6 +792,7 @@
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
     const storageKey = "road-safety-hazards-kagawa-prefecture";
+    const hazardVisibleZoom = 11;
     const kagawaCenter = [34.275, 133.95];
     const kagawaBounds = [
       [34.02, 133.43],
@@ -837,6 +838,7 @@
           realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
           isMapReady = true;
         }
+        renderPins();
       }, 80);
     }
 
@@ -880,6 +882,11 @@
     function renderPins() {
       markers.forEach((marker) => marker.remove());
       markers = [];
+      if (!document.body.classList.contains("logged-in")) return;
+      if (realMap.getZoom() < hazardVisibleZoom) {
+        routeStatus.textContent = `危険ピンはズーム${hazardVisibleZoom}以上で表示されます`;
+        return;
+      }
       hazards.forEach((hazard) => {
         const marker = L.marker([hazard.lat, hazard.lng], {
           icon: L.divIcon({
@@ -894,6 +901,7 @@
         marker.on("click", () => selectHazard(hazard.id));
         markers.push(marker);
       });
+      routeStatus.textContent = `${hazards.length}件の危険ピンを表示中`;
     }
 
     function renderList() {
@@ -943,7 +951,7 @@
       const hazard = hazards.find((item) => item.id === id);
       render();
       if (hazard) {
-        realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), 12));
+        realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), hazardVisibleZoom));
         showAlert(hazard);
       }
     }
@@ -1242,7 +1250,10 @@
     function focusHazards() {
       const relevantHazards = hazards.filter((hazard) => isRelevant(hazard));
       const points = relevantHazards.length ? relevantHazards : hazards;
-      realMap.fitBounds(points.map((hazard) => [hazard.lat, hazard.lng]), { padding: [70, 70] });
+      realMap.fitBounds(points.map((hazard) => [hazard.lat, hazard.lng]), { padding: [70, 70], maxZoom: hazardVisibleZoom });
+      if (realMap.getZoom() < hazardVisibleZoom) {
+        realMap.setZoom(hazardVisibleZoom);
+      }
       routeStatus.textContent = `${points.length}件の危険ピンを表示中`;
     }
 
@@ -1286,6 +1297,10 @@
     destinationInput.addEventListener("change", focusDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
+    realMap.on("zoomend", renderPins);
+    realMap.on("moveend", () => {
+      if (realMap.getZoom() >= hazardVisibleZoom && markers.length === 0) renderPins();
+    });
     mapTools.addEventListener("click", (event) => {
       const button = event.target.closest("[data-map-action]");
       if (!button) return;
