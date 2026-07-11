@@ -219,7 +219,14 @@
     }
 
     .mode strong, .mode span { display: block; }
-    .mode strong { margin-bottom: 4px; font-size: 14px; }
+    .mode strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .mode strong svg { width: 17px; height: 17px; stroke-width: 2.4; }
     .mode span { color: var(--muted); font-size: 12px; line-height: 1.45; }
 
     .mode.active {
@@ -911,11 +918,11 @@
           <h2>使う人</h2>
           <div class="mode-grid" id="modeGrid">
             <button class="mode active" type="button" data-mode="wheelchair">
-              <strong>車いす</strong>
+              <strong><i data-lucide="accessibility" aria-hidden="true"></i>車いす</strong>
               <span>段差・急な坂・狭い歩道を強く警告</span>
             </button>
             <button class="mode" type="button" data-mode="stroller">
-              <strong>ベビーカー</strong>
+              <strong><i data-lucide="baby" aria-hidden="true"></i>ベビーカー</strong>
               <span>凸凹・砂利・横断のしにくさを強く警告</span>
             </button>
           </div>
