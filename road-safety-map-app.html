@@ -1393,19 +1393,6 @@
       return `${profile.label}・約${Math.round(profile.speedMps * 60)}m/分`;
     }
 
-    function buildGuideRoute(from, to) {
-      const points = [];
-      const steps = 5;
-      for (let i = 0; i <= steps; i += 1) {
-        const progress = i / steps;
-        points.push([
-          from[0] + (to[0] - from[0]) * progress,
-          from[1] + (to[1] - from[1]) * progress
-        ]);
-      }
-      return points;
-    }
-
     function getPointToSegmentDistanceMeters(point, segmentStart, segmentEnd) {
       const current = realMap.project(L.latLng(point[0], point[1]), 16);
       const start = realMap.project(L.latLng(segmentStart[0], segmentStart[1]), 16);
@@ -1502,10 +1489,6 @@
       return candidates;
     }
 
-    function buildAvoidanceRoute(from, to, candidatePoint) {
-      return [from, candidatePoint, to];
-    }
-
     async function selectSafestRoute(baseRoute, from, to, routeHazards) {
       const baseHazardCount = routeHazards.length;
       const candidates = getAvoidanceCandidates(from, to, routeHazards);
@@ -1518,19 +1501,9 @@
       };
 
       for (const candidate of candidates) {
-        const fallbackPoints = buildAvoidanceRoute(from, to, candidate.point);
         const roadCandidate = await fetchRoadRoute(from, to, [candidate.point]);
-        const candidateRoute = roadCandidate || {
-          distanceKm: getRouteDistanceFromPoints(fallbackPoints),
-          durationSeconds: null,
-          points: fallbackPoints,
-          source: "迂回用の簡易ルート",
-          steps: [
-            "危険ピンが多い道を避けて、青いルートに沿って進みます。",
-            "迂回地点を通って、できるだけ危険の少ない道を選びます。",
-            "紫の「着」マークが目的地です。"
-          ]
-        };
+        if (!roadCandidate) continue;
+        const candidateRoute = roadCandidate;
         const candidateHazards = findHazardsOnRoute(candidateRoute.points);
         const candidateScore = candidateHazards.length * 100000 + candidateRoute.distanceKm * 100 + candidate.priority;
         const bestScore = bestRoute.hazardCount * 100000 + bestRoute.distanceKm * 100 + bestRoute.priority;
@@ -1751,8 +1724,7 @@
       }
     }
 
-    async function snapRoutePointsToRoad(routePoints, profile) {
-      const maxSnapDistance = profile === "foot" ? 90 : 140;
+    async function snapRoutePointsToRoad(routePoints, profile, maxSnapDistance) {
       const snappedPoints = [];
       let largestSnapDistance = 0;
 
@@ -1769,35 +1741,42 @@
     async function fetchRoadRoute(from, to, viaPoints = []) {
       const routePoints = [from, ...viaPoints, to];
       const profiles = ["foot", "driving"];
+      const strategies = [
+        { label: "道路上に補正", footMax: 90, drivingMax: 140 },
+        { label: "道路上に広めに補正", footMax: 180, drivingMax: 260 }
+      ];
 
-      for (const profile of profiles) {
-        try {
-          const snappedRoute = await snapRoutePointsToRoad(routePoints, profile);
-          if (!snappedRoute) continue;
-          const coords = snappedRoute.points.map((point) => `${point[1]},${point[0]}`).join(";");
-          const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true`;
-          const response = await fetch(url);
-          if (!response.ok) continue;
-          const data = await response.json();
-          const route = data.routes && data.routes[0];
-          if (data.code !== "Ok" || !route || !route.geometry || !route.geometry.coordinates) continue;
+      for (const strategy of strategies) {
+        for (const profile of profiles) {
+          try {
+            const maxSnapDistance = profile === "foot" ? strategy.footMax : strategy.drivingMax;
+            const snappedRoute = await snapRoutePointsToRoad(routePoints, profile, maxSnapDistance);
+            if (!snappedRoute) continue;
+            const coords = snappedRoute.points.map((point) => `${point[1]},${point[0]}`).join(";");
+            const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true`;
+            const response = await fetch(url);
+            if (!response.ok) continue;
+            const data = await response.json();
+            const route = data.routes && data.routes[0];
+            if (data.code !== "Ok" || !route || !route.geometry || !route.geometry.coordinates) continue;
 
-          return {
-            distanceKm: route.distance / 1000,
-            durationSeconds: route.duration,
-            points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
-            source: profile === "foot" ? "歩行者向け道路データ（道路上に補正）" : "道路データ（道路上に補正）",
-            snappedMeters: snappedRoute.largestSnapDistance,
-            steps: (() => {
-              const rawSteps = (route.legs || [])
-              .flatMap((leg) => leg.steps || [])
-              .filter((step) => step.distance > 5)
-                .slice(0, 5);
-              return rawSteps.map((step, index) => formatRouteStep(step, index, rawSteps.length));
-            })()
-          };
-        } catch (error) {
-          // Fallback to the next profile or to the local route below.
+            return {
+              distanceKm: route.distance / 1000,
+              durationSeconds: route.duration,
+              points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
+              source: profile === "foot" ? `歩行者向け道路データ（${strategy.label}）` : `道路データ（${strategy.label}）`,
+              snappedMeters: snappedRoute.largestSnapDistance,
+              steps: (() => {
+                const rawSteps = (route.legs || [])
+                .flatMap((leg) => leg.steps || [])
+                .filter((step) => step.distance > 5)
+                  .slice(0, 5);
+                return rawSteps.map((step, index) => formatRouteStep(step, index, rawSteps.length));
+              })()
+            };
+          } catch (error) {
+            // Try the next road-data strategy.
+          }
         }
       }
 
@@ -1822,19 +1801,19 @@
       guidePreview.innerHTML = "<p>道路に沿ったルートを計算しています。</p>";
 
       const roadRoute = await fetchRoadRoute(currentLatLng, destinationLatLng);
-      const fallbackDistance = getDistanceKm(currentLatLng, destinationLatLng);
-      let routeData = roadRoute || {
-        distanceKm: fallbackDistance,
-        durationSeconds: null,
-        points: buildGuideRoute(currentLatLng, destinationLatLng),
-        source: "簡易直線ルート",
-        steps: [
-          `${destination.name}まで約${fallbackDistance.toFixed(1)}kmの簡易表示です。`,
-          "道路データを取得できなかったため、現在地と目的地を結ぶ目安として表示しています。",
-          "ルート上の危険ピンが近い場所では、段差や凸凹を確認しながら進みます。",
-          "紫の「着」マークが目的地です。"
-        ]
-      };
+      if (!roadRoute) {
+        clearGuideRoute();
+        currentRoutePoints = [];
+        renderList();
+        routeStatus.textContent = "道路に沿ったルートを取得できませんでした";
+        guidePreview.innerHTML = `
+          <p>現在地または目的地が道路から離れているため、正確なルートを表示できませんでした。</p>
+          <p>地図を拡大して、道路の近くを行き先に選び直してください。</p>
+        `;
+        return;
+      }
+
+      let routeData = roadRoute;
       let routeHazards = findHazardsOnRoute(routeData.points);
       let avoidedHazardCount = 0;
 
