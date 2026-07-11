@@ -719,7 +719,20 @@
       box-shadow: 0 7px 16px rgba(47, 111, 199, 0.14);
     }
 
-    .device strong { display: block; color: var(--ink); font-size: 20px; }
+    .device strong {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      color: var(--ink);
+      font-size: 20px;
+    }
+
+    .device strong svg {
+      width: 21px;
+      height: 21px;
+      stroke-width: 2.4;
+    }
 
     .device.active strong { color: var(--blue); }
 
@@ -834,10 +847,10 @@
         <h2>知らせ方</h2>
         <div class="device-grid" id="alertMethodGrid" role="radiogroup" aria-label="危険の知らせ方">
           <button class="device active" type="button" data-alert-method="notification" role="radio" aria-checked="true">
-            <strong>通知</strong>画面に通知を表示
+            <strong><i data-lucide="bell" aria-hidden="true"></i>通知</strong>画面に通知を表示
           </button>
           <button class="device" type="button" data-alert-method="vibration" role="radio" aria-checked="false">
-            <strong>振動</strong>端末を振動させる
+            <strong><i data-lucide="vibrate" aria-hidden="true"></i>振動</strong>端末を振動させる
           </button>
         </div>
         <p class="helper-text" id="alertMethodStatus">危険に近づくと通知で知らせます。</p>
@@ -900,6 +913,7 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const defaultHazards = [
@@ -2391,6 +2405,7 @@
     });
 
     normalizeHazards();
+    if (window.lucide) window.lucide.createIcons();
     updateAlertMethodButtons();
     updateAlertMethodStatus();
     if (supabaseClient) {
