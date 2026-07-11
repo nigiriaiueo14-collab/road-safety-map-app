@@ -190,7 +190,7 @@
 
     .settings-panel[hidden] { display: none; }
 
-    .details-content[hidden] { display: none; }
+    .sidebar-content[hidden] { display: none; }
 
     .section {
       padding: 15px;
@@ -885,6 +885,44 @@
           <i data-lucide="settings" aria-hidden="true"></i>
         </button>
       </div>
+      <div class="settings-panel" id="settingsPanel" hidden>
+        <section class="section">
+          <h2>アカウント</h2>
+          <div class="account-bar">
+            <span id="userLabel">ログイン中</span>
+            <button class="link-button" type="button" id="logoutButton">ログアウト</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>知らせ方</h2>
+          <div class="device-grid" id="alertMethodGrid" role="radiogroup" aria-label="危険の知らせ方">
+            <button class="device active" type="button" data-alert-method="notification" role="radio" aria-checked="true">
+              <strong><i data-lucide="bell" aria-hidden="true"></i>通知</strong>画面に通知を表示
+            </button>
+            <button class="device" type="button" data-alert-method="vibration" role="radio" aria-checked="false">
+              <strong><i data-lucide="vibrate" aria-hidden="true"></i>振動</strong>端末を振動させる
+            </button>
+          </div>
+          <p class="helper-text" id="alertMethodStatus">危険に近づくと通知で知らせます。</p>
+        </section>
+
+        <section class="section">
+          <h2>使う人</h2>
+          <div class="mode-grid" id="modeGrid">
+            <button class="mode active" type="button" data-mode="wheelchair">
+              <strong>車いす</strong>
+              <span>段差・急な坂・狭い歩道を強く警告</span>
+            </button>
+            <button class="mode" type="button" data-mode="stroller">
+              <strong>ベビーカー</strong>
+              <span>凸凹・砂利・横断のしにくさを強く警告</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div class="sidebar-content" id="sidebarContent">
       <section class="section">
         <h2>行き先を設定</h2>
         <label>地名・施設・飲食店を検索
@@ -962,6 +1000,7 @@
         </div>
       </section>
 
+      </div>
     </aside>
 
     <section class="map-wrap" aria-label="危険共有マップ">
@@ -1018,42 +1057,6 @@
         </section>
       </div>
 
-      <div class="settings-panel" id="settingsPanel" hidden>
-        <section class="section">
-          <h2>アカウント</h2>
-          <div class="account-bar">
-            <span id="userLabel">ログイン中</span>
-            <button class="link-button" type="button" id="logoutButton">ログアウト</button>
-          </div>
-        </section>
-
-        <section class="section">
-          <h2>知らせ方</h2>
-          <div class="device-grid" id="alertMethodGrid" role="radiogroup" aria-label="危険の知らせ方">
-            <button class="device active" type="button" data-alert-method="notification" role="radio" aria-checked="true">
-              <strong><i data-lucide="bell" aria-hidden="true"></i>通知</strong>画面に通知を表示
-            </button>
-            <button class="device" type="button" data-alert-method="vibration" role="radio" aria-checked="false">
-              <strong><i data-lucide="vibrate" aria-hidden="true"></i>振動</strong>端末を振動させる
-            </button>
-          </div>
-          <p class="helper-text" id="alertMethodStatus">危険に近づくと通知で知らせます。</p>
-        </section>
-
-        <section class="section">
-          <h2>使う人</h2>
-          <div class="mode-grid" id="modeGrid">
-            <button class="mode active" type="button" data-mode="wheelchair">
-              <strong>車いす</strong>
-              <span>段差・急な坂・狭い歩道を強く警告</span>
-            </button>
-            <button class="mode" type="button" data-mode="stroller">
-              <strong>ベビーカー</strong>
-              <span>凸凹・砂利・横断のしにくさを強く警告</span>
-            </button>
-          </div>
-        </section>
-      </div>
     </aside>
   </main>
 
@@ -1117,8 +1120,8 @@
     const logoutButton = document.querySelector("#logoutButton");
     const settingsButton = document.querySelector("#settingsButton");
     const settingsPanel = document.querySelector("#settingsPanel");
-    const detailsPanel = document.querySelector(".details");
-    const detailsContent = document.querySelector("#detailsContent");
+    const sidebarPanel = document.querySelector(".sidebar");
+    const sidebarContent = document.querySelector("#sidebarContent");
     const modeGrid = document.querySelector("#modeGrid");
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
@@ -1218,7 +1221,7 @@
       settingsButton.setAttribute("aria-label", "設定を開く");
       settingsButton.title = "設定を開く";
       settingsPanel.hidden = true;
-      detailsContent.hidden = false;
+      sidebarContent.hidden = false;
       resetHazardPostForm(true);
       document.body.classList.add("logged-in");
       userLabel.textContent = isAdminUser() ? `${email} でログイン中（管理者）` : `${email} でログイン中`;
@@ -2693,12 +2696,10 @@
       settingsButton.setAttribute("aria-expanded", String(willOpen));
       settingsButton.setAttribute("aria-label", willOpen ? "設定を閉じる" : "設定を開く");
       settingsButton.title = willOpen ? "設定を閉じる" : "設定を開く";
+      if (willOpen && (isPickingPlace || draftPlace)) resetHazardPostForm(true);
       settingsPanel.hidden = !willOpen;
-      detailsContent.hidden = willOpen;
-      detailsPanel.scrollTop = 0;
-      if (willOpen && window.innerWidth <= 1040) {
-        window.requestAnimationFrame(() => settingsPanel.scrollIntoView({ behavior: "smooth", block: "start" }));
-      }
+      sidebarContent.hidden = willOpen;
+      sidebarPanel.scrollTop = 0;
     });
 
     alertMethodGrid.addEventListener("click", (event) => {
