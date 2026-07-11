@@ -707,6 +707,8 @@
             <option value="tonosho">土庄港</option>
           </select>
         </label>
+        <p class="helper-text">地図上の行きたい先をクリックしても設定できます。</p>
+        <div class="selected-place" id="destinationText">現在の行き先: 高松駅</div>
         <button class="primary" type="button" id="guideButton">現在地からルート案内</button>
       </section>
 
@@ -842,6 +844,7 @@
     const selectedPlaceText = document.querySelector("#selectedPlaceText");
     const placeInput = document.querySelector("#placeInput");
     const destinationInput = document.querySelector("#destinationInput");
+    const destinationText = document.querySelector("#destinationText");
     const guideButton = document.querySelector("#guideButton");
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
@@ -875,6 +878,7 @@
     let guideRouteLine;
     let currentRoutePoints = [];
     let destinationMarker;
+    let customDestination;
     let draftPlace;
     let draftMarker;
     let isPickingPlace = false;
@@ -1428,6 +1432,57 @@
       }, 140);
     }
 
+    function getSelectedDestination() {
+      return customDestination || destinations[destinationInput.value];
+    }
+
+    function updateDestinationText(destination) {
+      if (!destination) return;
+      destinationText.textContent = `現在の行き先: ${destination.name}`;
+    }
+
+    function setDestinationMarker(destination, shouldFocus = true) {
+      const destinationLatLng = [destination.lat, destination.lng];
+      if (destinationMarker) destinationMarker.remove();
+      destinationMarker = L.marker(destinationLatLng, {
+        icon: L.divIcon({
+          className: "",
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          html: '<div class="destination-marker"><span>着</span></div>'
+        })
+      }).addTo(realMap);
+      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
+      if (shouldFocus) setKagawaView(destinationLatLng, 12, `${destination.name}を表示中`);
+    }
+
+    function setDestinationFromMap(latlng) {
+      const point = [latlng.lat, latlng.lng];
+      if (!isInKagawa(point[0], point[1])) {
+        showKagawaOverview("香川県内の行きたい先をクリックしてください");
+        return;
+      }
+      customDestination = {
+        name: "地図で選んだ目的地",
+        lat: point[0],
+        lng: point[1]
+      };
+      currentRoutePoints = [];
+      renderList();
+      clearGuideRoute();
+      updateDestinationText(customDestination);
+      setDestinationMarker(customDestination, false);
+      routeStatus.textContent = "地図で行きたい先を設定しました";
+      guidePreview.innerHTML = "<p>現在地から、地図で選んだ目的地までのルート案内を始められます。</p>";
+    }
+
+    function selectPresetDestination() {
+      customDestination = null;
+      const destination = getSelectedDestination();
+      updateDestinationText(destination);
+      focusDestination();
+    }
+
     async function fetchRoadRoute(from, to, viaPoints = []) {
       const routePoints = [from, ...viaPoints, to];
       const coords = routePoints.map((point) => `${point[1]},${point[0]}`).join(";");
@@ -1462,7 +1517,7 @@
     }
 
     async function startRouteGuide() {
-      const destination = destinations[destinationInput.value];
+      const destination = getSelectedDestination();
       if (!destination) return;
 
       if (!currentLatLng) {
@@ -1569,21 +1624,10 @@
     }
 
     function focusDestination() {
-      const destination = destinations[destinationInput.value];
+      const destination = getSelectedDestination();
       if (!destination) return;
-      const destinationLatLng = [destination.lat, destination.lng];
-
-      if (destinationMarker) destinationMarker.remove();
-      destinationMarker = L.marker(destinationLatLng, {
-        icon: L.divIcon({
-          className: "",
-          iconSize: [36, 36],
-          iconAnchor: [18, 36],
-          html: '<div class="destination-marker"><span>着</span></div>'
-        })
-      }).addTo(realMap);
-      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
-      setKagawaView(destinationLatLng, 12, `${destination.name}を表示中`);
+      updateDestinationText(destination);
+      setDestinationMarker(destination);
     }
 
     function focusHazards() {
@@ -1638,7 +1682,7 @@
     pickPlaceButton.addEventListener("click", startPlacePicking);
     loginForm.addEventListener("submit", handleLogin);
     logoutButton.addEventListener("click", closeApp);
-    destinationInput.addEventListener("change", focusDestination);
+    destinationInput.addEventListener("change", selectPresetDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
     realMap.on("zoomend", renderPins);
@@ -1646,8 +1690,11 @@
       if (realMap.getZoom() >= hazardVisibleZoom && markers.length === 0) renderPins();
     });
     realMap.on("click", (event) => {
-      if (!isPickingPlace) return;
-      selectDraftPlace(event.latlng);
+      if (isPickingPlace) {
+        selectDraftPlace(event.latlng);
+        return;
+      }
+      setDestinationFromMap(event.latlng);
     });
     mapTools.querySelectorAll("[data-map-action]").forEach((button) => {
       button.addEventListener("click", (event) => {
