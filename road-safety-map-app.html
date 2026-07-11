@@ -1703,7 +1703,8 @@
       updateDestinationText(customDestination);
       setDestinationMarker(customDestination, false);
       routeStatus.textContent = "地図で行きたい先を設定しました";
-      guidePreview.innerHTML = "<p>現在地から、地図で選んだ目的地までのルート案内を始められます。</p>";
+      guidePreview.innerHTML = "<p>選んだ目的地までのルートを自動で計算します。</p>";
+      startRouteGuide();
     }
 
     function selectPresetDestination() {
