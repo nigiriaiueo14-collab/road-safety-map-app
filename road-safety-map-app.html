@@ -493,6 +493,20 @@
       border: 1px solid rgba(227, 107, 44, 0.28);
     }
 
+    .delete-hazard-button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 7px;
+      color: #fff;
+      background: var(--danger);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .delete-hazard-button:hover { filter: brightness(0.96); }
+
     .guide-panel {
       display: grid;
       gap: 10px;
@@ -902,6 +916,7 @@
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
     const storageKey = "road-safety-hazards-kagawa-prefecture";
+    const adminEmail = "nigiriaiueo14@gmail.com";
     // Supabaseの公開用Project URLとpublishable keyです。service_role keyは入れないでください。
     const supabaseSettings = {
       url: "https://juryczthnugberyzochc.supabase.co",
@@ -946,6 +961,7 @@
     let isPickingPlace = false;
     let pendingGuide = false;
     let isMapReady = false;
+    let currentUserEmail = "";
     const realMap = L.map(map, {
       zoomControl: true,
       scrollWheelZoom: true
@@ -961,8 +977,9 @@
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     function openApp(email) {
+      currentUserEmail = String(email || "").toLowerCase();
       document.body.classList.add("logged-in");
-      userLabel.textContent = `${email} でログイン中`;
+      userLabel.textContent = isAdminUser() ? `${email} でログイン中（管理者）` : `${email} でログイン中`;
       window.setTimeout(() => {
         realMap.invalidateSize();
         if (!isMapReady) {
@@ -987,7 +1004,12 @@
       document.body.classList.remove("logged-in");
       passwordInput.value = "";
       loginError.textContent = "";
+      currentUserEmail = "";
       emailInput.focus();
+    }
+
+    function isAdminUser() {
+      return currentUserEmail === adminEmail;
     }
 
     async function handleLogin(event) {
@@ -1150,7 +1172,25 @@
         <p>${hazard.note}</p>
         <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
         <p>${warning}</p>
+        ${isAdminUser() ? `<button class="delete-hazard-button" type="button" data-delete-hazard="${hazard.id}">この危険ピンを削除</button>` : ""}
       `;
+    }
+
+    function deleteHazard(id) {
+      if (!isAdminUser()) return;
+      const hazard = hazards.find((item) => item.id === id);
+      hazards = hazards.filter((item) => item.id !== id);
+      selectedId = null;
+      saveHazards();
+      render();
+      selectedPreview.innerHTML = "<p>危険ピンを削除しました。</p>";
+      if (hazard) {
+        alertTitle.textContent = "危険ピンを削除しました";
+        alertText.textContent = `${hazard.type}の投稿をマップから消去しました。`;
+        alertBox.classList.remove("hidden");
+        window.clearTimeout(showAlert.timer);
+        showAlert.timer = window.setTimeout(() => alertBox.classList.add("hidden"), 3600);
+      }
     }
 
     function selectHazard(id) {
@@ -1957,6 +1997,11 @@
 
     addButton.addEventListener("click", addHazard);
     pickPlaceButton.addEventListener("click", startPlacePicking);
+    selectedPreview.addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-hazard]");
+      if (!deleteButton) return;
+      deleteHazard(deleteButton.dataset.deleteHazard);
+    });
     loginForm.addEventListener("submit", handleLogin);
     signupButton.addEventListener("click", handleSignup);
     logoutButton.addEventListener("click", closeApp);
