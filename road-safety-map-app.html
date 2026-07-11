@@ -751,7 +751,7 @@
   <script>
     const defaultHazards = [
       { id: "h1", place: "高松駅前の歩道", type: "段差", level: "high", note: "駅前広場から横断歩道へ向かう部分に段差があります。", lat: 34.3506, lng: 134.0467, targets: ["wheelchair", "stroller"] },
-      { id: "h2", place: "丸亀駅周辺", type: "凸凹", level: "medium", note: "歩道の一部に古い舗装の盛り上がりがあります。", lat: 34.2919, lng: 133.7931, targets: ["stroller"] },
+      { id: "h2", place: "丸亀駅周辺", type: "凸凹", level: "medium", note: "歩道の一部に古い舗装の盛り上がりがあります。", lat: 34.2919, lng: 133.7931, targets: ["wheelchair", "stroller"] },
       { id: "h3", place: "坂出駅前通り", type: "舗装はがれ", level: "medium", note: "雨の日は水たまりになり、穴が見えにくいです。", lat: 34.3129, lng: 133.8569, targets: ["wheelchair", "stroller"] },
       { id: "h4", place: "観音寺市中心部", type: "狭い道", level: "low", note: "時間帯によって人通りが多く、通りにくくなります。", lat: 34.1275, lng: 133.6614, targets: ["wheelchair"] },
       { id: "h5", place: "さぬき市志度駅付近", type: "急な坂", level: "medium", note: "駅から住宅地へ向かう道に傾斜があります。", lat: 34.3214, lng: 134.1735, targets: ["wheelchair"] },
@@ -863,6 +863,18 @@
 
     function saveHazards() {
       localStorage.setItem(storageKey, JSON.stringify(hazards));
+    }
+
+    function normalizeHazards() {
+      let changed = false;
+      hazards = hazards.map((hazard) => {
+        if (hazard.place === "丸亀駅周辺" && !hazard.targets.includes("wheelchair")) {
+          changed = true;
+          return { ...hazard, targets: ["wheelchair", "stroller"] };
+        }
+        return hazard;
+      });
+      if (changed) saveHazards();
     }
 
     function isRelevant(hazard) {
@@ -1307,6 +1319,7 @@
       handleMapTool(button.dataset.mapAction);
     });
 
+    normalizeHazards();
     render();
   </script>
 </body>
