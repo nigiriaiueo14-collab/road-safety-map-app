@@ -1021,6 +1021,7 @@
     let alertMethod = localStorage.getItem(alertMethodStorageKey) === "vibration" ? "vibration" : "notification";
     let lastNearbyAlertAt = 0;
     const nearbyAlertedHazards = new Set();
+    let hazardRealtimeChannel;
     const realMap = L.map(map, {
       zoomControl: true,
       scrollWheelZoom: true
@@ -1039,6 +1040,7 @@
       currentUserEmail = String(email || "").toLowerCase();
       document.body.classList.add("logged-in");
       userLabel.textContent = isAdminUser() ? `${email} でログイン中（管理者）` : `${email} でログイン中`;
+      startHazardSync();
       window.setTimeout(() => {
         realMap.invalidateSize();
         if (!isMapReady) {
@@ -1058,6 +1060,7 @@
     async function closeApp() {
       stopVoiceGuide();
       stopLocationWatch();
+      stopHazardSync();
       if (supabaseClient) {
         await supabaseClient.auth.signOut();
       }
@@ -1126,6 +1129,56 @@
 
     function saveHazards() {
       localStorage.setItem(storageKey, JSON.stringify(hazards));
+    }
+
+    function mapSharedHazard(row) {
+      return {
+        id: String(row.id),
+        place: row.place || "投稿された場所",
+        type: row.type,
+        level: row.level,
+        note: row.note,
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        targets: Array.isArray(row.targets) ? row.targets : ["wheelchair"]
+      };
+    }
+
+    async function loadSharedHazards() {
+      if (!supabaseClient) return false;
+      const { data, error } = await supabaseClient
+        .from("hazards")
+        .select("id, place, type, level, note, lat, lng, targets, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        routeStatus.textContent = "共有された危険ピンを読み込めませんでした";
+        return false;
+      }
+
+      hazards = (data || []).map(mapSharedHazard);
+      saveHazards();
+      if (selectedId && !hazards.some((hazard) => hazard.id === selectedId)) selectedId = null;
+      render();
+      return true;
+    }
+
+    function startHazardSync() {
+      if (!supabaseClient) return;
+      loadSharedHazards();
+      if (hazardRealtimeChannel) return;
+      hazardRealtimeChannel = supabaseClient
+        .channel("shared-hazards")
+        .on("postgres_changes", { event: "*", schema: "public", table: "hazards" }, () => {
+          loadSharedHazards();
+        })
+        .subscribe();
+    }
+
+    function stopHazardSync() {
+      if (!supabaseClient || !hazardRealtimeChannel) return;
+      supabaseClient.removeChannel(hazardRealtimeChannel);
+      hazardRealtimeChannel = undefined;
     }
 
     function normalizeHazards() {
@@ -1204,11 +1257,11 @@
           item.classList.toggle("selected", selectedId === hazard.id);
           item.innerHTML = `
             <div class="item-head">
-              <strong>${hazard.type}</strong>
+              <strong>${escapeHtml(hazard.type)}</strong>
               <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
             </div>
-            <p>${hazard.note}</p>
-            <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
+            <p>${escapeHtml(hazard.note)}</p>
+            <p>対象: ${escapeHtml(hazard.targets.map((target) => labels[target] || target).join("・"))}</p>
           `;
           item.addEventListener("click", () => selectHazard(hazard.id));
           list.append(item);
@@ -1226,23 +1279,26 @@
         : `${labels[mode]}では優先度は低めですが、通行時は確認してください。`;
       selectedPreview.innerHTML = `
         <div class="item-head">
-          <strong>${hazard.type}</strong>
+          <strong>${escapeHtml(hazard.type)}</strong>
           <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
         </div>
-        <p>${hazard.note}</p>
-        <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
+        <p>${escapeHtml(hazard.note)}</p>
+        <p>対象: ${escapeHtml(hazard.targets.map((target) => labels[target] || target).join("・"))}</p>
         <p>${warning}</p>
-        ${isAdminUser() ? `<button class="delete-hazard-button" type="button" data-delete-hazard="${hazard.id}">この危険ピンを削除</button>` : ""}
+        ${isAdminUser() ? `<button class="delete-hazard-button" type="button" data-delete-hazard="${escapeHtml(hazard.id)}">この危険ピンを削除</button>` : ""}
       `;
     }
 
-    function deleteHazard(id) {
+    async function deleteHazard(id) {
       if (!isAdminUser()) return;
       const hazard = hazards.find((item) => item.id === id);
-      hazards = hazards.filter((item) => item.id !== id);
+      const { error } = await supabaseClient.from("hazards").delete().eq("id", id);
+      if (error) {
+        routeStatus.textContent = "危険ピンを削除できませんでした";
+        return;
+      }
       selectedId = null;
-      saveHazards();
-      render();
+      await loadSharedHazards();
       selectedPreview.innerHTML = "<p>危険ピンを削除しました。</p>";
       if (hazard) {
         alertTitle.textContent = "危険ピンを削除しました";
@@ -1432,7 +1488,7 @@
       routeStatus.textContent = "投稿場所を選択しました";
     }
 
-    function addHazard() {
+    async function addHazard() {
       const place = "投稿された場所";
       const type = document.querySelector("#typeInput").value;
       const level = document.querySelector("#levelInput").value;
@@ -1449,8 +1505,7 @@
         ? ["wheelchair", "stroller"]
         : ["wheelchair"];
       const area = draftPlace || sampleAreas[Math.floor(Math.random() * sampleAreas.length)];
-      const hazard = {
-        id: `h${Date.now()}`,
+      const newHazard = {
         place,
         type,
         level,
@@ -1459,7 +1514,24 @@
         lng: draftPlace ? area[1] : area[1] + (Math.random() - 0.5) * 0.045,
         targets
       };
-      hazards.unshift(hazard);
+      addButton.disabled = true;
+      addButton.textContent = "共有中";
+      const { data, error } = await supabaseClient
+        .from("hazards")
+        .insert(newHazard)
+        .select("id, place, type, level, note, lat, lng, targets, created_at")
+        .single();
+      addButton.disabled = false;
+      addButton.textContent = "この場所を共有";
+
+      if (error || !data) {
+        routeStatus.textContent = "危険ピンを共有できませんでした";
+        selectedPlaceText.textContent = "通信状態を確認して、もう一度投稿してください。";
+        return;
+      }
+
+      const hazard = mapSharedHazard(data);
+      hazards = [hazard, ...hazards.filter((item) => item.id !== hazard.id)];
       selectedId = hazard.id;
       draftPlace = null;
       if (draftMarker) {
