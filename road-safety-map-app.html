@@ -1092,7 +1092,6 @@
           })
         }).addTo(realMap);
 
-        marker.bindTooltip(`${hazard.place} / ${hazard.type}`, { direction: "top", offset: [0, -34] });
         marker.on("click", () => selectHazard(hazard.id));
         markers.push(marker);
       });
@@ -1125,10 +1124,9 @@
           item.classList.toggle("selected", selectedId === hazard.id);
           item.innerHTML = `
             <div class="item-head">
-              <strong>${hazard.place}</strong>
+              <strong>${hazard.type}</strong>
               <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
             </div>
-            <p>${hazard.type} / ${hazard.note}</p>
             <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
           `;
           item.addEventListener("click", () => selectHazard(hazard.id));
@@ -1147,10 +1145,10 @@
         : `${labels[mode]}では優先度は低めですが、通行時は確認してください。`;
       selectedPreview.innerHTML = `
         <div class="item-head">
-          <strong>${hazard.place}</strong>
+          <strong>${hazard.type}</strong>
           <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
         </div>
-        <p>${hazard.type}: ${hazard.note}</p>
+        <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
         <p>${warning}</p>
       `;
     }
