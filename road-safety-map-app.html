@@ -749,7 +749,6 @@
         <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
         <p class="helper-text">ボタンを押したあと、地図上の危険があった場所をクリックしてください。</p>
         <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
-        <label>場所の名前<input id="placeInput" maxlength="24" value="駅前通りの歩道"></label>
         <div class="row">
           <label>種類
             <select id="typeInput">
@@ -892,7 +891,6 @@
     const addButton = document.querySelector("#addButton");
     const pickPlaceButton = document.querySelector("#pickPlaceButton");
     const selectedPlaceText = document.querySelector("#selectedPlaceText");
-    const placeInput = document.querySelector("#placeInput");
     const destinationInput = document.querySelector("#destinationInput");
     const destinationText = document.querySelector("#destinationText");
     const guideButton = document.querySelector("#guideButton");
@@ -1238,14 +1236,11 @@
       const lat = draftPlace[0].toFixed(5);
       const lng = draftPlace[1].toFixed(5);
       selectedPlaceText.textContent = `選択中: 緯度 ${lat} / 経度 ${lng}`;
-      if (!placeInput.value.trim() || placeInput.value === "駅前通りの歩道") {
-        placeInput.value = "地図で選んだ場所";
-      }
       routeStatus.textContent = "投稿場所を選択しました";
     }
 
     function addHazard() {
-      const place = document.querySelector("#placeInput").value.trim() || "名前のない場所";
+      const place = "投稿された場所";
       const type = document.querySelector("#typeInput").value;
       const level = document.querySelector("#levelInput").value;
       const note = document.querySelector("#noteInput").value.trim() || "詳しいメモはまだありません。";
