@@ -1089,7 +1089,7 @@
     function startPlacePicking() {
       isPickingPlace = true;
       pickPlaceButton.textContent = "地図をクリックしてください";
-      selectedPlaceText.textContent = "地図上で危険があった場所をクリックしてください。";
+      selectedPlaceText.textContent = "道路上、または道路のすぐ近くをクリックしてください。";
       routeStatus.textContent = "投稿する場所を地図で選択中";
       realMap.getContainer().style.cursor = "crosshair";
       if (realMap.getZoom() < hazardVisibleZoom) {
@@ -1097,7 +1097,39 @@
       }
     }
 
-    function selectDraftPlace(latlng) {
+    async function isRoadLikePlace(latlng) {
+      if (!isInKagawa(latlng.lat, latlng.lng)) {
+        return { ok: false, message: "香川県内の道路上を選んでください。" };
+      }
+
+      try {
+        const url = `https://router.project-osrm.org/nearest/v1/foot/${latlng.lng},${latlng.lat}?number=1`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("nearest failed");
+        const data = await response.json();
+        const waypoint = data.waypoints && data.waypoints[0];
+        if (!waypoint || typeof waypoint.distance !== "number") {
+          return { ok: false, message: "道路に近い場所か確認できませんでした。" };
+        }
+        if (waypoint.distance > 45) {
+          return { ok: false, message: "道路から離れています。海上や建物内ではなく、道路上を選んでください。" };
+        }
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, message: "道路上か確認できませんでした。少し時間をおいてもう一度選んでください。" };
+      }
+    }
+
+    async function selectDraftPlace(latlng) {
+      selectedPlaceText.textContent = "道路上か確認しています。";
+      routeStatus.textContent = "投稿場所を確認中";
+      const roadCheck = await isRoadLikePlace(latlng);
+      if (!roadCheck.ok) {
+        selectedPlaceText.textContent = roadCheck.message;
+        routeStatus.textContent = "投稿できない場所です";
+        return;
+      }
+
       draftPlace = [latlng.lat, latlng.lng];
       isPickingPlace = false;
       pickPlaceButton.textContent = "地図で場所を選ぶ";
@@ -1821,7 +1853,7 @@
       stopVoiceGuide();
       routeStatus.textContent = "音声案内を停止しました";
     });
-    realMap.on("zoomend", renderPins);
+    realMap.on("zoomend", () => renderPins(false));
     realMap.on("moveend", () => {
       if (realMap.getZoom() >= hazardVisibleZoom && markers.length === 0) renderPins();
     });
