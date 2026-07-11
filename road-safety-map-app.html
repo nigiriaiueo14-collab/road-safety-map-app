@@ -1483,6 +1483,46 @@
       focusDestination();
     }
 
+    function formatRouteDistance(meters) {
+      if (meters >= 1000) return `約${(meters / 1000).toFixed(1)}km`;
+      return `約${Math.max(10, Math.round(meters / 10) * 10)}m`;
+    }
+
+    function getManeuverText(maneuver) {
+      const type = maneuver && maneuver.type;
+      const modifier = maneuver && maneuver.modifier;
+      const turnTexts = {
+        left: "左に曲がる",
+        right: "右に曲がる",
+        slight_left: "ゆるく左へ進む",
+        slight_right: "ゆるく右へ進む",
+        sharp_left: "大きく左に曲がる",
+        sharp_right: "大きく右に曲がる",
+        straight: "まっすぐ進む",
+        uturn: "折り返す"
+      };
+
+      if (type === "depart") return "出発します";
+      if (type === "arrive") return "目的地に到着します";
+      if (type === "roundabout" || type === "rotary") return "ロータリーを進む";
+      if (type === "merge") return "合流します";
+      if (type === "fork") return modifier && turnTexts[modifier] ? `${turnTexts[modifier]}分岐へ進む` : "分岐を進む";
+      if (type === "continue") return modifier && turnTexts[modifier] ? turnTexts[modifier] : "そのまま進む";
+      if (type === "turn") return turnTexts[modifier] || "曲がります";
+      return turnTexts[modifier] || "道なりに進む";
+    }
+
+    function formatRouteStep(step, index, total) {
+      const roadName = step.name ? `「${step.name}」` : "この道";
+      const distanceText = formatRouteDistance(step.distance || 0);
+      const maneuverText = getManeuverText(step.maneuver);
+      if (index === 0) return `${roadName}を${distanceText}進みます。`;
+      if (index === total - 1 && step.maneuver && step.maneuver.type === "arrive") {
+        return `${distanceText}先で目的地に到着します。`;
+      }
+      return `${distanceText}先で${maneuverText}。その後、${roadName}を進みます。`;
+    }
+
     async function fetchRoadRoute(from, to, viaPoints = []) {
       const routePoints = [from, ...viaPoints, to];
       const coords = routePoints.map((point) => `${point[1]},${point[0]}`).join(";");
@@ -1502,11 +1542,13 @@
             durationSeconds: route.duration,
             points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
             source: profile === "foot" ? "歩行者向け道路データ" : "道路データ",
-            steps: (route.legs || [])
+            steps: (() => {
+              const rawSteps = (route.legs || [])
               .flatMap((leg) => leg.steps || [])
               .filter((step) => step.distance > 5)
-              .slice(0, 3)
-              .map((step) => step.name ? `${step.name}を進みます。` : "道なりに進みます。")
+                .slice(0, 5);
+              return rawSteps.map((step, index) => formatRouteStep(step, index, rawSteps.length));
+            })()
           };
         } catch (error) {
           // Fallback to the next profile or to the local route below.
@@ -1540,8 +1582,9 @@
         points: buildGuideRoute(currentLatLng, destinationLatLng),
         source: "簡易ルート",
         steps: [
-          "青いルートに沿って目的地方面へ進みます。",
-          "危険ピンの近くでは段差や凸凹を確認します。",
+          `${destination.name}まで約${fallbackDistance.toFixed(1)}kmの簡易ルートです。`,
+          "青い線に沿って、まず中間地点の方向へ進みます。",
+          "ルート上の危険ピンが近い場所では、段差や凸凹を確認しながら進みます。",
           "紫の「着」マークが目的地です。"
         ]
       };
@@ -1594,8 +1637,8 @@
         ? `${destination.name}まで迂回ルートを表示中`
         : `${destination.name}までのルートを表示中`;
       const stepItems = routeData.steps.length ? routeData.steps : [
-        "青いルートに沿って目的地方面へ進みます。",
-        "危険ピンの近くでは段差や凸凹を確認します。",
+        `${destination.name}まで青いルートに沿って進みます。`,
+        "曲がり角や危険ピンの近くでは、地図を確認しながら進みます。",
         "紫の「着」マークが目的地です。"
       ];
       const routeNotice = avoidedHazardCount
