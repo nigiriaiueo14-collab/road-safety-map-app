@@ -1439,6 +1439,20 @@
       }
     }
 
+    function getJapaneseVoice() {
+      if (!("speechSynthesis" in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      return voices.find((voice) => voice.lang === "ja-JP")
+        || voices.find((voice) => voice.lang && voice.lang.startsWith("ja"))
+        || null;
+    }
+
+    function shapeSpeechText(parts) {
+      return parts
+        .map((part) => String(part).replaceAll("。", "、").replaceAll(" / ", "、"))
+        .join("。　");
+    }
+
     function speakVoiceGuide() {
       if (!("speechSynthesis" in window)) {
         routeStatus.textContent = "このブラウザでは音声案内を使えません";
@@ -1449,10 +1463,13 @@
         return;
       }
       stopVoiceGuide();
-      const utterance = new SpeechSynthesisUtterance(currentRouteSpeech.join("。"));
+      const utterance = new SpeechSynthesisUtterance(shapeSpeechText(currentRouteSpeech));
+      const voice = getJapaneseVoice();
+      if (voice) utterance.voice = voice;
       utterance.lang = "ja-JP";
-      utterance.rate = 0.92;
-      utterance.pitch = 1;
+      utterance.rate = 0.82;
+      utterance.pitch = 0.92;
+      utterance.volume = 1;
       utterance.onstart = () => {
         routeStatus.textContent = "音声案内中";
       };
@@ -1699,9 +1716,9 @@
         "紫の「着」マークが目的地です。"
       ];
       currentRouteSpeech = [
-        `${destination.name}までの音声案内を始めます`,
-        `所要時間は約${minutes}分、距離は約${routeData.distanceKm.toFixed(1)}キロメートルです`,
-        ...stepItems.map((step, index) => `${index + 1}番。${step}`)
+        `${destination.name}まで、音声案内を始めます`,
+        `所要時間は、約${minutes}分。距離は、約${routeData.distanceKm.toFixed(1)}キロメートルです`,
+        ...stepItems.map((step, index) => `${index + 1}番です。${step}`)
       ];
       const routeNotice = avoidedHazardCount
         ? `<p class="route-notice">${avoidedHazardCount}件の危険ピンが重なったため、迂回ルートに変更しました。</p>`
