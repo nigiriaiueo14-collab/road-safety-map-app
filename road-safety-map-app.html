@@ -84,6 +84,12 @@
       font-weight: 700;
     }
 
+    .login-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
     .sidebar, .details {
       padding: 18px;
       background: rgba(255, 255, 255, 0.9);
@@ -686,9 +692,12 @@
       <label>パスワード
         <input id="passwordInput" type="password" autocomplete="current-password" value="password" required>
       </label>
-      <button class="primary" type="submit">ログイン</button>
+      <div class="login-actions">
+        <button class="primary" type="submit" id="loginButton">ログイン</button>
+        <button class="secondary" type="button" id="signupButton">新規登録</button>
+      </div>
       <p class="login-error" id="loginError" aria-live="polite"></p>
-      <p class="login-note">試作品のため、入力内容は外部に送信されません。</p>
+      <p class="login-note" id="loginNote">Supabase認証でログインします。未設定時は試作品ログインで開きます。</p>
     </form>
   </section>
 
@@ -829,6 +838,7 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const defaultHazards = [
       { id: "h1", place: "高松駅前の歩道", type: "段差", level: "high", note: "駅前広場から横断歩道へ向かう部分に段差があります。", lat: 34.3506, lng: 134.0467, targets: ["wheelchair", "stroller"] },
@@ -868,6 +878,9 @@
     const emailInput = document.querySelector("#emailInput");
     const passwordInput = document.querySelector("#passwordInput");
     const loginError = document.querySelector("#loginError");
+    const loginNote = document.querySelector("#loginNote");
+    const loginButton = document.querySelector("#loginButton");
+    const signupButton = document.querySelector("#signupButton");
     const userLabel = document.querySelector("#userLabel");
     const logoutButton = document.querySelector("#logoutButton");
     const modeGrid = document.querySelector("#modeGrid");
@@ -891,6 +904,19 @@
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
     const storageKey = "road-safety-hazards-kagawa-prefecture";
+    // Supabase CLIで取得したProject URLとanon public keyをここに入れると、本物の認証に切り替わります。
+    const supabaseSettings = {
+      url: "",
+      anonKey: ""
+    };
+    const hasSupabaseConfig = Boolean(
+      supabaseSettings.url.startsWith("https://")
+      && supabaseSettings.anonKey.length > 20
+      && window.supabase
+    );
+    const supabaseClient = hasSupabaseConfig
+      ? window.supabase.createClient(supabaseSettings.url, supabaseSettings.anonKey)
+      : null;
     const hazardVisibleZoom = 11;
     const kagawaCenter = [34.275, 133.95];
     const kagawaBounds = [
@@ -949,15 +975,24 @@
       }, 80);
     }
 
-    function closeApp() {
+    function setAuthBusy(isBusy) {
+      loginButton.disabled = isBusy;
+      signupButton.disabled = isBusy;
+      loginButton.textContent = isBusy ? "確認中" : "ログイン";
+    }
+
+    async function closeApp() {
       stopVoiceGuide();
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
       document.body.classList.remove("logged-in");
       passwordInput.value = "";
       loginError.textContent = "";
       emailInput.focus();
     }
 
-    function handleLogin(event) {
+    async function handleLogin(event) {
       event.preventDefault();
       const email = emailInput.value.trim();
       const password = passwordInput.value.trim();
@@ -966,7 +1001,48 @@
         return;
       }
       loginError.textContent = "";
-      openApp(email);
+
+      if (!supabaseClient) {
+        loginNote.textContent = "Supabase未設定のため、試作品ログインで開いています。";
+        openApp(email);
+        return;
+      }
+
+      setAuthBusy(true);
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      setAuthBusy(false);
+      if (error) {
+        loginError.textContent = "ログインできませんでした。メールアドレスとパスワードを確認してください。";
+        return;
+      }
+      openApp(data.user.email || email);
+    }
+
+    async function handleSignup() {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      if (!email || !password) {
+        loginError.textContent = "新規登録するメールアドレスとパスワードを入力してください。";
+        return;
+      }
+      if (!supabaseClient) {
+        loginError.textContent = "SupabaseのURLと公開キーを設定すると新規登録できます。";
+        return;
+      }
+
+      loginError.textContent = "";
+      setAuthBusy(true);
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      setAuthBusy(false);
+      if (error) {
+        loginError.textContent = "新規登録できませんでした。入力内容を確認してください。";
+        return;
+      }
+      if (data.session) {
+        openApp(data.user.email || email);
+        return;
+      }
+      loginError.textContent = "確認メールを送信しました。メールを確認してからログインしてください。";
     }
 
     function saveHazards() {
@@ -1867,6 +1943,7 @@
     addButton.addEventListener("click", addHazard);
     pickPlaceButton.addEventListener("click", startPlacePicking);
     loginForm.addEventListener("submit", handleLogin);
+    signupButton.addEventListener("click", handleSignup);
     logoutButton.addEventListener("click", closeApp);
     destinationInput.addEventListener("change", selectPresetDestination);
     guideButton.addEventListener("click", startRouteGuide);
@@ -1901,6 +1978,13 @@
     });
 
     normalizeHazards();
+    if (supabaseClient) {
+      loginNote.textContent = "Supabase認証でログインします。アカウントがない場合は新規登録してください。";
+      supabaseClient.auth.getSession().then(({ data }) => {
+        const user = data.session && data.session.user;
+        if (user) openApp(user.email || "Supabaseユーザー");
+      });
+    }
     render();
   </script>
 </body>
