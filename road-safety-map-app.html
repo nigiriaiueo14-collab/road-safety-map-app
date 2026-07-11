@@ -469,6 +469,17 @@
       line-height: 1.55;
     }
 
+    .empty {
+      margin: 0;
+      padding: 12px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #f7fafb;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
     .danger-preview {
       padding: 13px;
       border-radius: 8px;
@@ -781,12 +792,12 @@
       <section class="section summary">
         <h2>選択中の危険</h2>
         <div class="danger-preview" id="selectedPreview">
-          <p>マップのピン、または下の一覧を選ぶと詳細が出ます。</p>
+          <p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>
         </div>
       </section>
 
       <section class="section">
-        <h2>共有された危険</h2>
+        <h2>ルート上にある共有された危険</h2>
         <div class="list" id="hazardList"></div>
       </section>
     </aside>
@@ -862,6 +873,7 @@
     let currentLocationMarker;
     let currentAccuracyCircle;
     let guideRouteLine;
+    let currentRoutePoints = [];
     let destinationMarker;
     let draftPlace;
     let draftMarker;
@@ -971,10 +983,24 @@
 
     function renderList() {
       list.innerHTML = "";
-      hazards
-        .slice()
-        .sort((a, b) => Number(isRelevant(b)) - Number(isRelevant(a)))
-        .forEach((hazard) => {
+      if (!currentRoutePoints.length) {
+        list.innerHTML = '<p class="empty">ルート案内を始めると、そのルート上にある共有された危険だけを表示します。</p>';
+        return;
+      }
+
+      const routeItems = findHazardsOnRoute(currentRoutePoints)
+        .sort((a, b) => {
+          const levelOrder = { high: 3, medium: 2, low: 1 };
+          return Number(isRelevant(b)) - Number(isRelevant(a))
+            || levelOrder[b.level] - levelOrder[a.level];
+        });
+
+      if (!routeItems.length) {
+        list.innerHTML = '<p class="empty">このルート上に共有された危険はありません。</p>';
+        return;
+      }
+
+      routeItems.forEach((hazard) => {
           const item = document.createElement("button");
           item.type = "button";
           item.className = "item";
@@ -989,13 +1015,13 @@
           `;
           item.addEventListener("click", () => selectHazard(hazard.id));
           list.append(item);
-        });
+      });
     }
 
     function renderSelected() {
       const hazard = hazards.find((item) => item.id === selectedId);
       if (!hazard) {
-        selectedPreview.innerHTML = "<p>マップのピン、または下の一覧を選ぶと詳細が出ます。</p>";
+        selectedPreview.innerHTML = "<p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>";
         return;
       }
       const warning = isRelevant(hazard)
@@ -1506,6 +1532,8 @@
 
       const minutes = getEstimatedMinutes(routeData.distanceKm, routeData.durationSeconds);
       const dangerCount = routeHazards.length;
+      currentRoutePoints = routeData.points;
+      renderList();
       focusRouteOnMap(routeData.points);
       routeStatus.textContent = avoidedHazardCount
         ? `${destination.name}まで迂回ルートを表示中`
