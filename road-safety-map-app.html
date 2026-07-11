@@ -355,6 +355,19 @@
     .hazard-marker.high { background: var(--danger); }
     .hazard-marker.dimmed { opacity: 0.35; }
 
+    .draft-marker {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #202427;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 8px rgba(32, 36, 39, 0.16), 0 10px 22px rgba(32, 36, 39, 0.22);
+      font-weight: 900;
+    }
+
     .location-marker {
       width: 26px;
       height: 26px;
@@ -475,6 +488,23 @@
 
     .guide-panel strong { color: var(--ink); }
     .guide-panel p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+    .helper-text {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .selected-place {
+      padding: 10px 11px;
+      border-radius: 7px;
+      color: var(--ink);
+      background: #f7fafb;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 1.45;
+    }
 
     .route-summary {
       display: grid;
@@ -659,6 +689,9 @@
 
       <section class="section">
         <h2>危険を投稿</h2>
+        <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
+        <p class="helper-text">ボタンを押したあと、地図上の危険があった場所をクリックしてください。</p>
+        <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
         <label>場所の名前<input id="placeInput" maxlength="24" value="駅前通りの歩道"></label>
         <div class="row">
           <label>種類
@@ -782,6 +815,9 @@
     const selectedPreview = document.querySelector("#selectedPreview");
     const guidePreview = document.querySelector("#guidePreview");
     const addButton = document.querySelector("#addButton");
+    const pickPlaceButton = document.querySelector("#pickPlaceButton");
+    const selectedPlaceText = document.querySelector("#selectedPlaceText");
+    const placeInput = document.querySelector("#placeInput");
     const destinationInput = document.querySelector("#destinationInput");
     const guideButton = document.querySelector("#guideButton");
     const locationButton = document.querySelector("#locationButton");
@@ -815,6 +851,9 @@
     let currentAccuracyCircle;
     let guideRouteLine;
     let destinationMarker;
+    let draftPlace;
+    let draftMarker;
+    let isPickingPlace = false;
     let pendingGuide = false;
     let isMapReady = false;
     const realMap = L.map(map, {
@@ -978,6 +1017,43 @@
       showAlert.timer = window.setTimeout(() => alertBox.classList.add("hidden"), 3600);
     }
 
+    function startPlacePicking() {
+      isPickingPlace = true;
+      pickPlaceButton.textContent = "地図をクリックしてください";
+      selectedPlaceText.textContent = "地図上で危険があった場所をクリックしてください。";
+      routeStatus.textContent = "投稿する場所を地図で選択中";
+      realMap.getContainer().style.cursor = "crosshair";
+      if (realMap.getZoom() < hazardVisibleZoom) {
+        realMap.setZoom(hazardVisibleZoom);
+      }
+    }
+
+    function selectDraftPlace(latlng) {
+      draftPlace = [latlng.lat, latlng.lng];
+      isPickingPlace = false;
+      pickPlaceButton.textContent = "地図で場所を選ぶ";
+      realMap.getContainer().style.cursor = "";
+
+      if (draftMarker) draftMarker.remove();
+      draftMarker = L.marker(draftPlace, {
+        icon: L.divIcon({
+          className: "",
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
+          html: '<div class="draft-marker">＋</div>'
+        })
+      }).addTo(realMap);
+      draftMarker.bindTooltip("投稿する場所", { direction: "top", offset: [0, -16] });
+
+      const lat = draftPlace[0].toFixed(5);
+      const lng = draftPlace[1].toFixed(5);
+      selectedPlaceText.textContent = `選択中: 緯度 ${lat} / 経度 ${lng}`;
+      if (!placeInput.value.trim() || placeInput.value === "駅前通りの歩道") {
+        placeInput.value = "地図で選んだ場所";
+      }
+      routeStatus.textContent = "投稿場所を選択しました";
+    }
+
     function addHazard() {
       const place = document.querySelector("#placeInput").value.trim() || "名前のない場所";
       const type = document.querySelector("#typeInput").value;
@@ -986,19 +1062,25 @@
       const targets = type === "凸凹" || type === "舗装はがれ"
         ? ["wheelchair", "stroller"]
         : ["wheelchair"];
-      const area = sampleAreas[Math.floor(Math.random() * sampleAreas.length)];
+      const area = draftPlace || sampleAreas[Math.floor(Math.random() * sampleAreas.length)];
       const hazard = {
         id: `h${Date.now()}`,
         place,
         type,
         level,
         note,
-        lat: area[0] + (Math.random() - 0.5) * 0.035,
-        lng: area[1] + (Math.random() - 0.5) * 0.045,
+        lat: draftPlace ? area[0] : area[0] + (Math.random() - 0.5) * 0.035,
+        lng: draftPlace ? area[1] : area[1] + (Math.random() - 0.5) * 0.045,
         targets
       };
       hazards.unshift(hazard);
       selectedId = hazard.id;
+      draftPlace = null;
+      if (draftMarker) {
+        draftMarker.remove();
+        draftMarker = null;
+      }
+      selectedPlaceText.textContent = "投稿場所はまだ選ばれていません。";
       saveHazards();
       render();
       showAlert(hazard);
@@ -1304,6 +1386,7 @@
     });
 
     addButton.addEventListener("click", addHazard);
+    pickPlaceButton.addEventListener("click", startPlacePicking);
     loginForm.addEventListener("submit", handleLogin);
     logoutButton.addEventListener("click", closeApp);
     destinationInput.addEventListener("change", focusDestination);
@@ -1312,6 +1395,10 @@
     realMap.on("zoomend", renderPins);
     realMap.on("moveend", () => {
       if (realMap.getZoom() >= hazardVisibleZoom && markers.length === 0) renderPins();
+    });
+    realMap.on("click", (event) => {
+      if (!isPickingPlace) return;
+      selectDraftPlace(event.latlng);
     });
     mapTools.addEventListener("click", (event) => {
       const button = event.target.closest("[data-map-action]");
