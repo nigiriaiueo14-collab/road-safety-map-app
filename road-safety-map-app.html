@@ -245,6 +245,64 @@
 
     textarea { min-height: 74px; resize: vertical; }
 
+    .place-search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 42px;
+      gap: 7px;
+      align-items: stretch;
+    }
+
+    .place-search-row input { min-width: 0; }
+
+    .place-search-button {
+      width: 42px;
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: #fff;
+      background: var(--blue);
+    }
+
+    .place-search-button:disabled { opacity: 0.6; cursor: wait; }
+    .place-search-button svg { width: 20px; height: 20px; }
+
+    .place-search-results {
+      max-height: 230px;
+      margin: 8px 0 10px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      overscroll-behavior: contain;
+    }
+
+    .place-search-results[hidden] { display: none; }
+
+    .place-result {
+      width: 100%;
+      display: grid;
+      gap: 3px;
+      padding: 10px 11px;
+      color: var(--ink);
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    .place-result:last-child { border-bottom: 0; }
+    .place-result:hover { background: #f5f9fb; }
+    .place-result strong { font-size: 13px; }
+    .place-result span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+
+    .place-search-message {
+      margin: 0;
+      padding: 10px 11px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
     .primary, .secondary {
       min-height: 42px;
       padding: 0 14px;
@@ -857,14 +915,42 @@
 
       <section class="section">
         <h2>行き先を設定</h2>
-        <label>行きたい場所
+        <label>地名・施設・飲食店を検索
+          <div class="place-search-row">
+            <input id="placeSearchInput" type="search" placeholder="例：栗林公園、うどん店" autocomplete="off" maxlength="60">
+            <button class="place-search-button" type="button" id="placeSearchButton" aria-label="場所を検索" title="場所を検索">
+              <i data-lucide="search" aria-hidden="true"></i>
+            </button>
+          </div>
+        </label>
+        <div class="place-search-results" id="placeSearchResults" aria-live="polite" hidden></div>
+        <p class="helper-text">検索データ: OpenStreetMap / Photon</p>
+        <label>登録済みの場所
           <select id="destinationInput">
-            <option value="takamatsu">高松駅</option>
-            <option value="marugame">丸亀駅</option>
-            <option value="sakaide">坂出駅</option>
-            <option value="kanonji">観音寺駅</option>
-            <option value="shido">志度駅</option>
-            <option value="tonosho">土庄港</option>
+            <option value="" disabled>検索した場所を選択中</option>
+            <optgroup label="駅・交通">
+              <option value="takamatsu" selected>高松駅</option>
+              <option value="marugame">丸亀駅</option>
+              <option value="sakaide">坂出駅</option>
+              <option value="kanonji">観音寺駅</option>
+              <option value="shido">志度駅</option>
+              <option value="tonosho">土庄港</option>
+              <option value="takamatsu_airport">高松空港</option>
+            </optgroup>
+            <optgroup label="観光地">
+              <option value="ritsurin">栗林公園</option>
+              <option value="konpira">金刀比羅宮</option>
+              <option value="marugame_castle">丸亀城</option>
+              <option value="shikoku_aquarium">四国水族館</option>
+              <option value="chichibugahama">父母ヶ浜</option>
+            </optgroup>
+            <optgroup label="飲食店">
+              <option value="bakaichidai">手打十段うどん バカ一代</option>
+              <option value="yamadaya">うどん本陣 山田家</option>
+              <option value="yamagoe">山越うどん</option>
+              <option value="susaki">須崎食料品店</option>
+              <option value="gamou">がもううどん</option>
+            </optgroup>
           </select>
         </label>
         <p class="helper-text">地図上の行きたい先をクリックしても設定できます。</p>
@@ -990,7 +1076,18 @@
       sakaide: { name: "坂出駅", lat: 34.3129, lng: 133.8569 },
       kanonji: { name: "観音寺駅", lat: 34.1236, lng: 133.6555 },
       shido: { name: "志度駅", lat: 34.3214, lng: 134.1735 },
-      tonosho: { name: "土庄港", lat: 34.4862, lng: 134.1856 }
+      tonosho: { name: "土庄港", lat: 34.4862, lng: 134.1856 },
+      takamatsu_airport: { name: "高松空港", lat: 34.215174, lng: 134.019401 },
+      ritsurin: { name: "栗林公園", lat: 34.329497, lng: 134.043926 },
+      konpira: { name: "金刀比羅宮", lat: 34.183988, lng: 133.809390 },
+      marugame_castle: { name: "丸亀城", lat: 34.286022, lng: 133.800101 },
+      shikoku_aquarium: { name: "四国水族館", lat: 34.312331, lng: 133.807790 },
+      chichibugahama: { name: "父母ヶ浜", lat: 34.188310, lng: 133.646831 },
+      bakaichidai: { name: "手打十段うどん バカ一代", lat: 34.336756, lng: 134.058608 },
+      yamadaya: { name: "うどん本陣 山田家", lat: 34.353525, lng: 134.129756 },
+      yamagoe: { name: "山越うどん", lat: 34.225728, lng: 133.928281 },
+      susaki: { name: "須崎食料品店", lat: 34.175008, lng: 133.769466 },
+      gamou: { name: "がもううどん", lat: 34.305016, lng: 133.914800 }
     };
 
     const loginForm = document.querySelector("#loginForm");
@@ -1015,6 +1112,9 @@
     const selectedPlaceText = document.querySelector("#selectedPlaceText");
     const destinationInput = document.querySelector("#destinationInput");
     const destinationText = document.querySelector("#destinationText");
+    const placeSearchInput = document.querySelector("#placeSearchInput");
+    const placeSearchButton = document.querySelector("#placeSearchButton");
+    const placeSearchResults = document.querySelector("#placeSearchResults");
     const guideButton = document.querySelector("#guideButton");
     const locationButton = document.querySelector("#locationButton");
     const locationStatus = document.querySelector("#locationStatus");
@@ -1081,6 +1181,8 @@
     let lastNearbyAlertAt = 0;
     const nearbyAlertedHazards = new Set();
     let hazardRealtimeChannel;
+    const placeSearchCache = new Map();
+    let currentPlaceSearchResults = [];
     const realMap = L.map(map, {
       zoomControl: true,
       scrollWheelZoom: true
@@ -2048,6 +2150,121 @@
       }, 140);
     }
 
+    function getPlaceResultDetail(properties) {
+      const street = [properties.housenumber, properties.street].filter(Boolean).join(" ");
+      const parts = [street, properties.district, properties.city, properties.county]
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .filter((value) => value !== properties.name);
+      return parts.slice(0, 3).join("・") || "香川県内";
+    }
+
+    function showPlaceSearchMessage(message) {
+      currentPlaceSearchResults = [];
+      placeSearchResults.innerHTML = "";
+      const paragraph = document.createElement("p");
+      paragraph.className = "place-search-message";
+      paragraph.textContent = message;
+      placeSearchResults.append(paragraph);
+      placeSearchResults.hidden = false;
+    }
+
+    function renderPlaceSearchResults(results) {
+      currentPlaceSearchResults = results;
+      placeSearchResults.innerHTML = "";
+      if (!results.length) {
+        showPlaceSearchMessage("香川県内で場所が見つかりませんでした。名前を変えて検索してください。");
+        return;
+      }
+
+      results.forEach((result, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "place-result";
+        button.dataset.placeResult = String(index);
+        const name = document.createElement("strong");
+        name.textContent = result.name;
+        const detail = document.createElement("span");
+        detail.textContent = result.detail;
+        button.append(name, detail);
+        placeSearchResults.append(button);
+      });
+      placeSearchResults.hidden = false;
+    }
+
+    async function searchKagawaPlaces() {
+      const query = placeSearchInput.value.trim();
+      if (query.length < 2) {
+        showPlaceSearchMessage("2文字以上で場所を入力してください。");
+        placeSearchInput.focus();
+        return;
+      }
+
+      if (placeSearchCache.has(query)) {
+        renderPlaceSearchResults(placeSearchCache.get(query));
+        return;
+      }
+
+      placeSearchButton.disabled = true;
+      showPlaceSearchMessage("香川県内を検索しています。");
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          bbox: "133.43,34.02,134.45,34.58",
+          countrycode: "JP",
+          limit: "8"
+        });
+        const response = await fetch(`https://photon.komoot.io/api/?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("Place search failed");
+        const data = await response.json();
+        const seen = new Set();
+        const results = (data.features || []).map((feature) => {
+          const coordinates = feature.geometry && feature.geometry.coordinates;
+          const properties = feature.properties || {};
+          if (!coordinates || !properties.name) return null;
+          const lat = Number(coordinates[1]);
+          const lng = Number(coordinates[0]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInKagawa(lat, lng)) return null;
+          const key = `${properties.osm_type || ""}-${properties.osm_id || ""}-${lat.toFixed(5)}-${lng.toFixed(5)}`;
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            name: String(properties.name).slice(0, 80),
+            detail: getPlaceResultDetail(properties),
+            lat,
+            lng
+          };
+        }).filter(Boolean);
+        placeSearchCache.set(query, results);
+        renderPlaceSearchResults(results);
+      } catch (error) {
+        showPlaceSearchMessage("場所を検索できませんでした。少し待ってから、もう一度試してください。");
+      } finally {
+        window.clearTimeout(timeoutId);
+        placeSearchButton.disabled = false;
+      }
+    }
+
+    function setDestinationFromSearch(result) {
+      if (!result || !isInKagawa(result.lat, result.lng)) return;
+      stopVoiceGuide();
+      customDestination = { name: result.name, lat: result.lat, lng: result.lng };
+      destinationInput.value = "";
+      currentRoutePoints = [];
+      currentRouteSpeech = [];
+      renderList();
+      clearGuideRoute();
+      updateDestinationText(customDestination);
+      setDestinationMarker(customDestination, false);
+      placeSearchResults.hidden = true;
+      routeStatus.textContent = `${customDestination.name}を行き先に設定しました`;
+      guidePreview.innerHTML = "<p>検索した場所までのルートを自動で計算します。</p>";
+      startRouteGuide();
+    }
+
     function getSelectedDestination() {
       return customDestination || destinations[destinationInput.value];
     }
@@ -2068,7 +2285,7 @@
           html: '<div class="destination-marker"><span>着</span></div>'
         })
       }).addTo(realMap);
-      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
+      destinationMarker.bindTooltip(escapeHtml(destination.name), { direction: "top", offset: [0, -28] });
       if (shouldFocus) setKagawaView(destinationLatLng, 12, `${destination.name}を表示中`);
     }
 
@@ -2301,7 +2518,7 @@
           html: '<div class="destination-marker"><span>着</span></div>'
         })
       }).addTo(realMap);
-      destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
+      destinationMarker.bindTooltip(escapeHtml(destination.name), { direction: "top", offset: [0, -28] });
 
       const minutes = getEstimatedMinutes(routeData.distanceKm, routeHazards);
       const travelTimeText = formatTravelTime(minutes);
@@ -2334,7 +2551,7 @@
         <div class="route-summary">
           <div class="route-title">
             <div>
-              <strong>現在地から${destination.name}</strong>
+              <strong>現在地から${escapeHtml(destination.name)}</strong>
               <p>${routeData.source}を使った案内</p>
             </div>
             <div class="route-time">${travelTimeText}</div>
@@ -2437,6 +2654,18 @@
     signupButton.addEventListener("click", handleSignup);
     logoutButton.addEventListener("click", closeApp);
     destinationInput.addEventListener("change", selectPresetDestination);
+    placeSearchButton.addEventListener("click", searchKagawaPlaces);
+    placeSearchInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      searchKagawaPlaces();
+    });
+    placeSearchResults.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-place-result]");
+      if (!button) return;
+      const result = currentPlaceSearchResults[Number(button.dataset.placeResult)];
+      setDestinationFromSearch(result);
+    });
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
     guidePreview.addEventListener("click", (event) => {
