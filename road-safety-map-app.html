@@ -533,6 +533,18 @@
       font-size: 12px;
     }
 
+    .route-notice {
+      margin: 0;
+      padding: 9px 10px;
+      border-radius: 7px;
+      background: #fff7e6;
+      border: 1px solid #ffd99a;
+      color: #8a4b00;
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 800;
+    }
+
     .route-chip {
       min-height: 26px;
       display: inline-flex;
@@ -1183,6 +1195,60 @@
       return [from, [midLat, midLng], to];
     }
 
+    function getPointToSegmentDistanceMeters(point, segmentStart, segmentEnd) {
+      const current = realMap.project(L.latLng(point[0], point[1]), 16);
+      const start = realMap.project(L.latLng(segmentStart[0], segmentStart[1]), 16);
+      const end = realMap.project(L.latLng(segmentEnd[0], segmentEnd[1]), 16);
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      if (dx === 0 && dy === 0) return L.latLng(point[0], point[1]).distanceTo(L.latLng(segmentStart[0], segmentStart[1]));
+      const t = Math.max(0, Math.min(1, ((current.x - start.x) * dx + (current.y - start.y) * dy) / (dx * dx + dy * dy)));
+      const nearest = realMap.unproject(L.point(start.x + t * dx, start.y + t * dy), 16);
+      return L.latLng(point[0], point[1]).distanceTo(nearest);
+    }
+
+    function findHazardsOnRoute(points) {
+      if (!points || points.length < 2) return [];
+      const routeBufferMeters = 140;
+      return hazards.filter((hazard) => {
+        if (!isRelevant(hazard) || hazard.level === "low") return false;
+        const hazardPoint = [hazard.lat, hazard.lng];
+        for (let i = 0; i < points.length - 1; i += 1) {
+          if (getPointToSegmentDistanceMeters(hazardPoint, points[i], points[i + 1]) <= routeBufferMeters) {
+            return true;
+          }
+        }
+        return false;
+      });
+    }
+
+    function getAvoidancePoint(from, to, routeHazards) {
+      const hazardCenter = routeHazards.reduce((center, hazard) => {
+        center[0] += hazard.lat;
+        center[1] += hazard.lng;
+        return center;
+      }, [0, 0]).map((value) => value / routeHazards.length);
+      const routeCenter = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+      let awayLat = routeCenter[0] - hazardCenter[0];
+      let awayLng = routeCenter[1] - hazardCenter[1];
+      const length = Math.hypot(awayLat, awayLng) || 1;
+      awayLat /= length;
+      awayLng /= length;
+      if (Math.abs(awayLat) + Math.abs(awayLng) < 0.2) {
+        awayLat = 0.45;
+        awayLng = -0.55;
+      }
+      const detourSize = 0.075;
+      const lat = Math.max(kagawaBounds[0][0], Math.min(kagawaBounds[1][0], routeCenter[0] + awayLat * detourSize));
+      const lng = Math.max(kagawaBounds[0][1], Math.min(kagawaBounds[1][1], routeCenter[1] + awayLng * detourSize));
+      return [lat, lng];
+    }
+
+    function buildAvoidanceRoute(from, to, routeHazards) {
+      const detour = getAvoidancePoint(from, to, routeHazards);
+      return [from, detour, to];
+    }
+
     function escapeHtml(text) {
       return String(text)
         .replaceAll("&", "&amp;")
@@ -1200,8 +1266,9 @@
       }
     }
 
-    async function fetchRoadRoute(from, to) {
-      const coords = `${from[1]},${from[0]};${to[1]},${to[0]}`;
+    async function fetchRoadRoute(from, to, viaPoints = []) {
+      const routePoints = [from, ...viaPoints, to];
+      const coords = routePoints.map((point) => `${point[1]},${point[0]}`).join(";");
       const profiles = ["foot", "driving"];
 
       for (const profile of profiles) {
@@ -1218,7 +1285,8 @@
             durationSeconds: route.duration,
             points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
             source: profile === "foot" ? "歩行者向け道路データ" : "道路データ",
-            steps: (route.legs && route.legs[0] && route.legs[0].steps ? route.legs[0].steps : [])
+            steps: (route.legs || [])
+              .flatMap((leg) => leg.steps || [])
               .filter((step) => step.distance > 5)
               .slice(0, 3)
               .map((step) => step.name ? `${step.name}を進みます。` : "道なりに進みます。")
@@ -1249,7 +1317,7 @@
 
       const roadRoute = await fetchRoadRoute(currentLatLng, destinationLatLng);
       const fallbackDistance = getDistanceKm(currentLatLng, destinationLatLng);
-      const routeData = roadRoute || {
+      let routeData = roadRoute || {
         distanceKm: fallbackDistance,
         durationSeconds: null,
         points: buildGuideRoute(currentLatLng, destinationLatLng),
@@ -1260,6 +1328,38 @@
           "紫の「着」マークが目的地です。"
         ]
       };
+      let routeHazards = findHazardsOnRoute(routeData.points);
+      let avoidedHazardCount = 0;
+
+      if (routeHazards.length >= 2) {
+        const avoidancePoint = getAvoidancePoint(currentLatLng, destinationLatLng, routeHazards);
+        const avoidanceRoute = await fetchRoadRoute(currentLatLng, destinationLatLng, [avoidancePoint]);
+        const avoidedRouteData = avoidanceRoute || {
+          distanceKm: getDistanceKm(currentLatLng, avoidancePoint) + getDistanceKm(avoidancePoint, destinationLatLng),
+          durationSeconds: null,
+          points: buildAvoidanceRoute(currentLatLng, destinationLatLng, routeHazards),
+          source: "迂回用の簡易ルート",
+          steps: [
+            "危険ピンが多い道を避けて、青いルートに沿って進みます。",
+            "迂回地点を通って、できるだけ危険の少ない道を選びます。",
+            "紫の「着」マークが目的地です。"
+          ]
+        };
+        avoidedHazardCount = routeHazards.length;
+        routeData = {
+          ...avoidedRouteData,
+          source: `${avoidedRouteData.source}（危険ピンを回避）`,
+          steps: [
+            `${avoidedHazardCount}件の危険ピンがルート近くにあったため、別のルートに変更しました。`,
+            ...(avoidedRouteData.steps.length ? avoidedRouteData.steps : [
+              "青いルートに沿って目的地方面へ進みます。",
+              "危険ピンの近くでは段差や凸凹を確認します。",
+              "紫の「着」マークが目的地です。"
+            ])
+          ].slice(0, 4)
+        };
+        routeHazards = findHazardsOnRoute(routeData.points);
+      }
 
       clearGuideRoute();
       if (destinationMarker) destinationMarker.remove();
@@ -1292,14 +1392,19 @@
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
 
       const minutes = getEstimatedMinutes(routeData.distanceKm, routeData.durationSeconds);
-      const dangerCount = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
+      const dangerCount = routeHazards.length;
       realMap.fitBounds(routeData.points, { padding: [80, 80] });
-      routeStatus.textContent = `${destination.name}までのルートを表示中`;
+      routeStatus.textContent = avoidedHazardCount
+        ? `${destination.name}まで迂回ルートを表示中`
+        : `${destination.name}までのルートを表示中`;
       const stepItems = routeData.steps.length ? routeData.steps : [
         "青いルートに沿って目的地方面へ進みます。",
         "危険ピンの近くでは段差や凸凹を確認します。",
         "紫の「着」マークが目的地です。"
       ];
+      const routeNotice = avoidedHazardCount
+        ? `<p class="route-notice">${avoidedHazardCount}件の危険ピンが重なったため、迂回ルートに変更しました。</p>`
+        : "";
       guidePreview.innerHTML = `
         <div class="route-summary">
           <div class="route-title">
@@ -1314,6 +1419,7 @@
             <span>約${routeData.distanceKm.toFixed(1)}km</span>
             <span>${dangerCount}件の注意地点を確認</span>
           </div>
+          ${routeNotice}
         </div>
         <ul class="route-steps">
           ${stepItems.map((step, index) => `<li><span class="step-icon">${index + 1}</span><span>${escapeHtml(step)}</span></li>`).join("")}
