@@ -1396,9 +1396,16 @@
     }
 
     function buildGuideRoute(from, to) {
-      const midLat = (from[0] + to[0]) / 2 + 0.018;
-      const midLng = (from[1] + to[1]) / 2 - 0.012;
-      return [from, [midLat, midLng], to];
+      const points = [];
+      const steps = 5;
+      for (let i = 0; i <= steps; i += 1) {
+        const progress = i / steps;
+        points.push([
+          from[0] + (to[0] - from[0]) * progress,
+          from[1] + (to[1] - from[1]) * progress
+        ]);
+      }
+      return points;
     }
 
     function getPointToSegmentDistanceMeters(point, segmentStart, segmentEnd) {
@@ -1729,13 +1736,47 @@
       return `${distanceText}先で${maneuverText}。その後、${roadName}を進みます。`;
     }
 
+    async function snapPointToRoad(point, profile) {
+      try {
+        const url = `https://router.project-osrm.org/nearest/v1/${profile}/${point[1]},${point[0]}?number=1`;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const data = await response.json();
+        const waypoint = data.waypoints && data.waypoints[0];
+        if (data.code !== "Ok" || !waypoint || !waypoint.location) return null;
+        return {
+          point: [waypoint.location[1], waypoint.location[0]],
+          distanceMeters: waypoint.distance || 0
+        };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    async function snapRoutePointsToRoad(routePoints, profile) {
+      const maxSnapDistance = profile === "foot" ? 90 : 140;
+      const snappedPoints = [];
+      let largestSnapDistance = 0;
+
+      for (const point of routePoints) {
+        const snapped = await snapPointToRoad(point, profile);
+        if (!snapped || snapped.distanceMeters > maxSnapDistance) return null;
+        snappedPoints.push(snapped.point);
+        largestSnapDistance = Math.max(largestSnapDistance, snapped.distanceMeters);
+      }
+
+      return { points: snappedPoints, largestSnapDistance };
+    }
+
     async function fetchRoadRoute(from, to, viaPoints = []) {
       const routePoints = [from, ...viaPoints, to];
-      const coords = routePoints.map((point) => `${point[1]},${point[0]}`).join(";");
       const profiles = ["foot", "driving"];
 
       for (const profile of profiles) {
         try {
+          const snappedRoute = await snapRoutePointsToRoad(routePoints, profile);
+          if (!snappedRoute) continue;
+          const coords = snappedRoute.points.map((point) => `${point[1]},${point[0]}`).join(";");
           const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true`;
           const response = await fetch(url);
           if (!response.ok) continue;
@@ -1747,7 +1788,8 @@
             distanceKm: route.distance / 1000,
             durationSeconds: route.duration,
             points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
-            source: profile === "foot" ? "歩行者向け道路データ" : "道路データ",
+            source: profile === "foot" ? "歩行者向け道路データ（道路上に補正）" : "道路データ（道路上に補正）",
+            snappedMeters: snappedRoute.largestSnapDistance,
             steps: (() => {
               const rawSteps = (route.legs || [])
               .flatMap((leg) => leg.steps || [])
@@ -1787,10 +1829,10 @@
         distanceKm: fallbackDistance,
         durationSeconds: null,
         points: buildGuideRoute(currentLatLng, destinationLatLng),
-        source: "簡易ルート",
+        source: "簡易直線ルート",
         steps: [
-          `${destination.name}まで約${fallbackDistance.toFixed(1)}kmの簡易ルートです。`,
-          "青い線に沿って、まず中間地点の方向へ進みます。",
+          `${destination.name}まで約${fallbackDistance.toFixed(1)}kmの簡易表示です。`,
+          "道路データを取得できなかったため、現在地と目的地を結ぶ目安として表示しています。",
           "ルート上の危険ピンが近い場所では、段差や凸凹を確認しながら進みます。",
           "紫の「着」マークが目的地です。"
         ]
