@@ -567,6 +567,29 @@
       font-weight: 800;
     }
 
+    .voice-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .voice-button {
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      border: 1px solid rgba(35, 120, 255, 0.22);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .voice-button.stop {
+      color: #8a4b00;
+      background: #fff7e6;
+      border-color: #ffd99a;
+    }
+
     .route-steps {
       display: grid;
       gap: 10px;
@@ -877,6 +900,7 @@
     let currentAccuracyCircle;
     let guideRouteLine;
     let currentRoutePoints = [];
+    let currentRouteSpeech = [];
     let destinationMarker;
     let customDestination;
     let draftPlace;
@@ -912,6 +936,7 @@
     }
 
     function closeApp() {
+      stopVoiceGuide();
       document.body.classList.remove("logged-in");
       passwordInput.value = "";
       loginError.textContent = "";
@@ -1408,6 +1433,35 @@
         .replaceAll("'", "&#039;");
     }
 
+    function stopVoiceGuide() {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function speakVoiceGuide() {
+      if (!("speechSynthesis" in window)) {
+        routeStatus.textContent = "このブラウザでは音声案内を使えません";
+        return;
+      }
+      if (!currentRouteSpeech.length) {
+        routeStatus.textContent = "先にルート案内を表示してください";
+        return;
+      }
+      stopVoiceGuide();
+      const utterance = new SpeechSynthesisUtterance(currentRouteSpeech.join("。"));
+      utterance.lang = "ja-JP";
+      utterance.rate = 0.92;
+      utterance.pitch = 1;
+      utterance.onstart = () => {
+        routeStatus.textContent = "音声案内中";
+      };
+      utterance.onend = () => {
+        routeStatus.textContent = "音声案内が終了しました";
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+
     function clearGuideRoute() {
       if (guideRouteLine) {
         if (guideRouteLine.backLine) guideRouteLine.backLine.remove();
@@ -1462,12 +1516,14 @@
         showKagawaOverview("香川県内の行きたい先をクリックしてください");
         return;
       }
+      stopVoiceGuide();
       customDestination = {
         name: "地図で選んだ目的地",
         lat: point[0],
         lng: point[1]
       };
       currentRoutePoints = [];
+      currentRouteSpeech = [];
       renderList();
       clearGuideRoute();
       updateDestinationText(customDestination);
@@ -1561,6 +1617,7 @@
     async function startRouteGuide() {
       const destination = getSelectedDestination();
       if (!destination) return;
+      stopVoiceGuide();
 
       if (!currentLatLng) {
         guidePreview.innerHTML = "<p>現在地を取得してから、選んだ目的地までのルートを表示します。</p>";
@@ -1641,6 +1698,11 @@
         "曲がり角や危険ピンの近くでは、地図を確認しながら進みます。",
         "紫の「着」マークが目的地です。"
       ];
+      currentRouteSpeech = [
+        `${destination.name}までの音声案内を始めます`,
+        `所要時間は約${minutes}分、距離は約${routeData.distanceKm.toFixed(1)}キロメートルです`,
+        ...stepItems.map((step, index) => `${index + 1}番。${step}`)
+      ];
       const routeNotice = avoidedHazardCount
         ? `<p class="route-notice">${avoidedHazardCount}件の危険ピンが重なったため、迂回ルートに変更しました。</p>`
         : "";
@@ -1657,6 +1719,10 @@
             <span class="route-chip">徒歩</span>
             <span>約${routeData.distanceKm.toFixed(1)}km</span>
             <span>${dangerCount}件の注意地点を確認</span>
+          </div>
+          <div class="voice-actions">
+            <button class="voice-button" type="button" data-voice-action="speak">音声案内</button>
+            <button class="voice-button stop" type="button" data-voice-action="stop">停止</button>
           </div>
           ${routeNotice}
         </div>
@@ -1728,6 +1794,16 @@
     destinationInput.addEventListener("change", selectPresetDestination);
     guideButton.addEventListener("click", startRouteGuide);
     locationButton.addEventListener("click", showCurrentLocation);
+    guidePreview.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-voice-action]");
+      if (!button) return;
+      if (button.dataset.voiceAction === "speak") {
+        speakVoiceGuide();
+        return;
+      }
+      stopVoiceGuide();
+      routeStatus.textContent = "音声案内を停止しました";
+    });
     realMap.on("zoomend", renderPins);
     realMap.on("moveend", () => {
       if (realMap.getZoom() >= hazardVisibleZoom && markers.length === 0) renderPins();
