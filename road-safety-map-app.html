@@ -687,17 +687,17 @@
       <h1>道路の凸凹を伝えるアプリ</h1>
       <p class="lead">ログインして、危険情報の共有マップを開きます。</p>
       <label>メールアドレス
-        <input id="emailInput" type="email" autocomplete="email" value="sample@example.com" required>
+        <input id="emailInput" type="email" autocomplete="email" required>
       </label>
       <label>パスワード
-        <input id="passwordInput" type="password" autocomplete="current-password" value="password" required>
+        <input id="passwordInput" type="password" autocomplete="current-password" required>
       </label>
       <div class="login-actions">
         <button class="primary" type="submit" id="loginButton">ログイン</button>
         <button class="secondary" type="button" id="signupButton">新規登録</button>
       </div>
       <p class="login-error" id="loginError" aria-live="polite"></p>
-      <p class="login-note" id="loginNote">Supabase認証でログインします。未設定時は試作品ログインで開きます。</p>
+      <p class="login-note" id="loginNote">Supabaseに登録されたメールアドレスとパスワードでログインします。</p>
     </form>
   </section>
 
@@ -904,10 +904,10 @@
     const alertTitle = document.querySelector("#alertTitle");
     const alertText = document.querySelector("#alertText");
     const storageKey = "road-safety-hazards-kagawa-prefecture";
-    // Supabase CLIで取得したProject URLとanon public keyをここに入れると、本物の認証に切り替わります。
+    // Supabaseの公開用Project URLとpublishable keyです。service_role keyは入れないでください。
     const supabaseSettings = {
-      url: "",
-      anonKey: ""
+      url: "https://juryczthnugberyzochc.supabase.co",
+      anonKey: "sb_publishable_0Z8bqvZ9AJeeGf7sjci4uQ_Rl7rcC4Y"
     };
     const hasSupabaseConfig = Boolean(
       supabaseSettings.url.startsWith("https://")
@@ -1003,8 +1003,7 @@
       loginError.textContent = "";
 
       if (!supabaseClient) {
-        loginNote.textContent = "Supabase未設定のため、試作品ログインで開いています。";
-        openApp(email);
+        loginError.textContent = "Supabase認証の設定を読み込めませんでした。";
         return;
       }
 
