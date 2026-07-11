@@ -878,6 +878,8 @@
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(realMap);
 
+    L.DomEvent.disableClickPropagation(mapTools);
+    L.DomEvent.disableScrollPropagation(mapTools);
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     function openApp(email) {
@@ -942,12 +944,12 @@
       renderSelected();
     }
 
-    function renderPins() {
+    function renderPins(updateStatus = false) {
       markers.forEach((marker) => marker.remove());
       markers = [];
       if (!document.body.classList.contains("logged-in")) return;
       if (realMap.getZoom() < hazardVisibleZoom) {
-        routeStatus.textContent = `危険ピンはズーム${hazardVisibleZoom}以上で表示されます`;
+        if (updateStatus) routeStatus.textContent = `危険ピンはズーム${hazardVisibleZoom}以上で表示されます`;
         return;
       }
       hazards.forEach((hazard) => {
@@ -964,7 +966,7 @@
         marker.on("click", () => selectHazard(hazard.id));
         markers.push(marker);
       });
-      routeStatus.textContent = `${hazards.length}件の危険ピンを表示中`;
+      if (updateStatus) routeStatus.textContent = `${hazards.length}件の危険ピンを表示中`;
     }
 
     function renderList() {
@@ -1108,12 +1110,28 @@
         && lng >= kagawaBounds[0][1] && lng <= kagawaBounds[1][1];
     }
 
+    function showKagawaOverview(statusText = "香川県全体を表示中") {
+      realMap.fitBounds(kagawaBounds, { padding: [18, 18], maxZoom: 10 });
+      routeStatus.textContent = statusText;
+    }
+
+    function setKagawaView(latLng, zoom, statusText) {
+      if (!latLng || !isInKagawa(latLng[0], latLng[1])) {
+        showKagawaOverview("香川県の範囲に戻しました");
+        return false;
+      }
+      realMap.setView(latLng, zoom);
+      if (statusText) routeStatus.textContent = statusText;
+      return true;
+    }
+
     function focusCurrentLocation() {
       if (!currentLatLng) return;
-      realMap.setView(currentLatLng, 15);
-      locationStatus.textContent = isInKagawa(currentLatLng[0], currentLatLng[1])
-        ? "現在地を表示中"
-        : "現在地を表示中（香川県外）";
+      if (setKagawaView(currentLatLng, 15, "現在地を表示中")) {
+        locationStatus.textContent = "現在地を表示中";
+      } else {
+        locationStatus.textContent = "現在地は香川県外のため、地図は香川県に戻しました";
+      }
     }
 
     function showCurrentLocation() {
@@ -1521,14 +1539,17 @@
         })
       }).addTo(realMap);
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
-
-      realMap.setView(destinationLatLng, 12);
-      routeStatus.textContent = `${destination.name}を表示中`;
+      setKagawaView(destinationLatLng, 12, `${destination.name}を表示中`);
     }
 
     function focusHazards() {
       const relevantHazards = hazards.filter((hazard) => isRelevant(hazard));
-      const points = relevantHazards.length ? relevantHazards : hazards;
+      const points = (relevantHazards.length ? relevantHazards : hazards)
+        .filter((hazard) => isInKagawa(hazard.lat, hazard.lng));
+      if (!points.length) {
+        showKagawaOverview("香川県全体を表示中");
+        return;
+      }
       realMap.fitBounds(points.map((hazard) => [hazard.lat, hazard.lng]), { padding: [70, 70], maxZoom: hazardVisibleZoom });
       if (realMap.getZoom() < hazardVisibleZoom) {
         realMap.setZoom(hazardVisibleZoom);
@@ -1538,8 +1559,7 @@
 
     function handleMapTool(action) {
       if (action === "prefecture") {
-        realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
-        routeStatus.textContent = "香川県全体を表示中";
+        showKagawaOverview();
         return;
       }
 
@@ -1585,10 +1605,12 @@
       if (!isPickingPlace) return;
       selectDraftPlace(event.latlng);
     });
-    mapTools.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-map-action]");
-      if (!button) return;
-      handleMapTool(button.dataset.mapAction);
+    mapTools.querySelectorAll("[data-map-action]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handleMapTool(button.dataset.mapAction);
+      });
     });
 
     normalizeHazards();
