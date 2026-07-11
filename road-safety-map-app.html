@@ -1127,6 +1127,7 @@
               <strong>${hazard.type}</strong>
               <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
             </div>
+            <p>${hazard.note}</p>
             <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
           `;
           item.addEventListener("click", () => selectHazard(hazard.id));
@@ -1148,6 +1149,7 @@
           <strong>${hazard.type}</strong>
           <span class="badge ${hazard.level}">${labels[hazard.level]}</span>
         </div>
+        <p>${hazard.note}</p>
         <p>対象: ${hazard.targets.map((target) => labels[target]).join("・")}</p>
         <p>${warning}</p>
       `;
