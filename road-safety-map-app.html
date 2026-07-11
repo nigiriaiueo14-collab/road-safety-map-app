@@ -1068,7 +1068,8 @@
       return start.distanceTo(goal) / 1000;
     }
 
-    function getEstimatedMinutes(distanceKm) {
+    function getEstimatedMinutes(distanceKm, durationSeconds) {
+      if (durationSeconds) return Math.max(1, Math.ceil(durationSeconds / 60));
       const baseMinutes = Math.ceil((distanceKm / 4.2) * 60);
       const cautionMinutes = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length * 2;
       return Math.max(3, baseMinutes + cautionMinutes);
@@ -1080,7 +1081,55 @@
       return [from, [midLat, midLng], to];
     }
 
-    function startRouteGuide() {
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function clearGuideRoute() {
+      if (guideRouteLine) {
+        if (guideRouteLine.backLine) guideRouteLine.backLine.remove();
+        guideRouteLine.remove();
+        guideRouteLine = null;
+      }
+    }
+
+    async function fetchRoadRoute(from, to) {
+      const coords = `${from[1]},${from[0]};${to[1]},${to[0]}`;
+      const profiles = ["foot", "driving"];
+
+      for (const profile of profiles) {
+        try {
+          const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson&steps=true`;
+          const response = await fetch(url);
+          if (!response.ok) continue;
+          const data = await response.json();
+          const route = data.routes && data.routes[0];
+          if (data.code !== "Ok" || !route || !route.geometry || !route.geometry.coordinates) continue;
+
+          return {
+            distanceKm: route.distance / 1000,
+            durationSeconds: route.duration,
+            points: route.geometry.coordinates.map((point) => [point[1], point[0]]),
+            source: profile === "foot" ? "歩行者向け道路データ" : "道路データ",
+            steps: (route.legs && route.legs[0] && route.legs[0].steps ? route.legs[0].steps : [])
+              .filter((step) => step.distance > 5)
+              .slice(0, 3)
+              .map((step) => step.name ? `${step.name}を進みます。` : "道なりに進みます。")
+          };
+        } catch (error) {
+          // Fallback to the next profile or to the local route below.
+        }
+      }
+
+      return null;
+    }
+
+    async function startRouteGuide() {
       const destination = destinations[destinationInput.value];
       if (!destination) return;
 
@@ -1093,15 +1142,27 @@
       }
 
       const destinationLatLng = [destination.lat, destination.lng];
-      const guidePoints = buildGuideRoute(currentLatLng, destinationLatLng);
+      routeStatus.textContent = `${destination.name}までのルートを計算中`;
+      guidePreview.innerHTML = "<p>道路に沿ったルートを計算しています。</p>";
 
-      if (guideRouteLine) {
-        if (guideRouteLine.backLine) guideRouteLine.backLine.remove();
-        guideRouteLine.remove();
-      }
+      const roadRoute = await fetchRoadRoute(currentLatLng, destinationLatLng);
+      const fallbackDistance = getDistanceKm(currentLatLng, destinationLatLng);
+      const routeData = roadRoute || {
+        distanceKm: fallbackDistance,
+        durationSeconds: null,
+        points: buildGuideRoute(currentLatLng, destinationLatLng),
+        source: "簡易ルート",
+        steps: [
+          "青いルートに沿って目的地方面へ進みます。",
+          "危険ピンの近くでは段差や凸凹を確認します。",
+          "紫の「着」マークが目的地です。"
+        ]
+      };
+
+      clearGuideRoute();
       if (destinationMarker) destinationMarker.remove();
 
-      const routeBackLine = L.polyline(guidePoints, {
+      const routeBackLine = L.polyline(routeData.points, {
         color: "#ffffff",
         weight: 13,
         opacity: 0.95,
@@ -1109,7 +1170,7 @@
         lineJoin: "round"
       }).addTo(realMap);
 
-      guideRouteLine = L.polyline(guidePoints, {
+      guideRouteLine = L.polyline(routeData.points, {
         color: "#2378ff",
         weight: 8,
         opacity: 0.95,
@@ -1128,30 +1189,32 @@
       }).addTo(realMap);
       destinationMarker.bindTooltip(destination.name, { direction: "top", offset: [0, -28] });
 
-      const distance = getDistanceKm(currentLatLng, destinationLatLng);
-      const minutes = getEstimatedMinutes(distance);
+      const minutes = getEstimatedMinutes(routeData.distanceKm, routeData.durationSeconds);
       const dangerCount = hazards.filter((hazard) => isRelevant(hazard) && hazard.level !== "low").length;
-      realMap.fitBounds([currentLatLng, destinationLatLng], { padding: [80, 80] });
+      realMap.fitBounds(routeData.points, { padding: [80, 80] });
       routeStatus.textContent = `${destination.name}までのルートを表示中`;
+      const stepItems = routeData.steps.length ? routeData.steps : [
+        "青いルートに沿って目的地方面へ進みます。",
+        "危険ピンの近くでは段差や凸凹を確認します。",
+        "紫の「着」マークが目的地です。"
+      ];
       guidePreview.innerHTML = `
         <div class="route-summary">
           <div class="route-title">
             <div>
               <strong>現在地から${destination.name}</strong>
-              <p>歩きやすさを優先した案内</p>
+              <p>${routeData.source}を使った案内</p>
             </div>
             <div class="route-time">${minutes}分</div>
           </div>
           <div class="route-meta">
             <span class="route-chip">徒歩</span>
-            <span>約${distance.toFixed(1)}km</span>
+            <span>約${routeData.distanceKm.toFixed(1)}km</span>
             <span>${dangerCount}件の注意地点を確認</span>
           </div>
         </div>
         <ul class="route-steps">
-          <li><span class="step-icon">1</span><span>現在地から青いルートに沿って進みます。</span></li>
-          <li><span class="step-icon">2</span><span>危険ピンの近くでは段差や凸凹を確認します。</span></li>
-          <li><span class="step-icon">3</span><span>紫の「着」マークが目的地です。</span></li>
+          ${stepItems.map((step, index) => `<li><span class="step-icon">${index + 1}</span><span>${escapeHtml(step)}</span></li>`).join("")}
         </ul>
       `;
     }
