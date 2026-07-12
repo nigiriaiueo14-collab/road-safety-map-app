@@ -55,7 +55,7 @@
     .app {
       min-height: 100vh;
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr) 360px;
+      grid-template-columns: 320px minmax(0, 1fr);
     }
 
     @media (min-width: 1041px) {
@@ -71,7 +71,7 @@
         min-height: 0;
       }
 
-      .sidebar, .details {
+      .sidebar {
         height: 100%;
         min-height: 0;
         overflow-y: auto;
@@ -133,16 +133,11 @@
       gap: 8px;
     }
 
-    .sidebar, .details {
+    .sidebar {
       padding: 18px;
       background: rgba(255, 255, 255, 0.9);
       border-right: 1px solid var(--line);
       overflow: auto;
-    }
-
-    .details {
-      border-right: 0;
-      border-left: 1px solid var(--line);
     }
 
     h1 {
@@ -228,6 +223,8 @@
       background: var(--panel);
       box-shadow: 0 8px 22px rgba(32, 36, 39, 0.06);
     }
+
+    .context-panel[hidden] { display: none; }
 
     .mode-grid, .row {
       display: grid;
@@ -880,13 +877,12 @@
 
     @media (max-width: 1040px) {
       .app { grid-template-columns: 300px 1fr; }
-      .details { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
       .map-wrap { min-height: 720px; }
     }
 
     @media (max-width: 760px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar, .details { border: 0; }
+      .sidebar { border: 0; }
       .map-wrap { min-height: 620px; order: -1; }
       .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .legend { grid-column: 1 / -1; }
@@ -1008,6 +1004,23 @@
         <button class="primary" type="button" id="guideButton">現在地からルート案内</button>
       </section>
 
+      <section class="section summary context-panel" id="routeGuideSection" hidden>
+        <h2>ルート案内</h2>
+        <div class="guide-panel" id="guidePreview">
+          <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
+        </div>
+      </section>
+
+      <section class="section summary context-panel" id="selectedHazardSection" hidden>
+        <h2>選択中の危険</h2>
+        <div class="danger-preview" id="selectedPreview"></div>
+      </section>
+
+      <section class="section context-panel" id="routeHazardsSection" hidden>
+        <h2>ルート上にある共有された危険</h2>
+        <div class="list" id="hazardList"></div>
+      </section>
+
       <section class="section">
         <h2>危険を投稿</h2>
         <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
@@ -1069,29 +1082,6 @@
       </div>
     </section>
 
-    <aside class="details">
-      <div class="details-content" id="detailsContent">
-        <section class="section summary">
-          <h2>ルート案内</h2>
-          <div class="guide-panel" id="guidePreview">
-            <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
-          </div>
-        </section>
-
-        <section class="section summary">
-          <h2>選択中の危険</h2>
-          <div class="danger-preview" id="selectedPreview">
-            <p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>
-          </div>
-        </section>
-
-        <section class="section">
-          <h2>ルート上にある共有された危険</h2>
-          <div class="list" id="hazardList"></div>
-        </section>
-      </div>
-
-    </aside>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1162,6 +1152,9 @@
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
     const guidePreview = document.querySelector("#guidePreview");
+    const routeGuideSection = document.querySelector("#routeGuideSection");
+    const selectedHazardSection = document.querySelector("#selectedHazardSection");
+    const routeHazardsSection = document.querySelector("#routeHazardsSection");
     const addButton = document.querySelector("#addButton");
     const pickPlaceButton = document.querySelector("#pickPlaceButton");
     const cancelPlaceButton = document.querySelector("#cancelPlaceButton");
@@ -1451,10 +1444,10 @@
 
     function renderList() {
       list.innerHTML = "";
-      if (!currentRoutePoints.length) {
-        list.innerHTML = '<p class="empty">ルート案内を始めると、そのルート上にある共有された危険だけを表示します。</p>';
-        return;
-      }
+      const hasRoute = currentRoutePoints.length > 0;
+      routeGuideSection.hidden = !hasRoute;
+      routeHazardsSection.hidden = !hasRoute;
+      if (!hasRoute) return;
 
       const routeItems = findHazardsOnRoute(currentRoutePoints)
         .sort((a, b) => {
@@ -1488,8 +1481,9 @@
 
     function renderSelected() {
       const hazard = hazards.find((item) => item.id === selectedId);
+      selectedHazardSection.hidden = !hazard;
       if (!hazard) {
-        selectedPreview.innerHTML = "<p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>";
+        selectedPreview.innerHTML = "";
         return;
       }
       const warning = isRelevant(hazard)
@@ -1534,6 +1528,7 @@
       if (hazard) {
         realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), hazardVisibleZoom));
         showAlert(hazard);
+        window.setTimeout(() => selectedHazardSection.scrollIntoView({ behavior: "smooth", block: "nearest" }), 0);
       }
     }
 
