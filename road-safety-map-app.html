@@ -170,18 +170,23 @@
 
     .sidebar-title {
       min-width: 0;
-      display: grid;
-      gap: 0;
+    }
+
+    .sidebar-title-ending {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
     }
 
     .pill.sidebar-profile {
-      min-height: 26px;
-      justify-self: end;
-      padding: 0 8px;
+      min-height: 24px;
+      padding: 0 7px;
       color: var(--blue);
       background: var(--blue-soft);
       border-color: #c7d9f8;
-      font-size: 12px;
+      font-size: 11px;
+      line-height: 1;
     }
 
     .settings-button {
@@ -914,8 +919,7 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-title">
-          <h1>道路の凸凹を伝えるアプリ</h1>
-          <span class="pill sidebar-profile" id="profilePill">車いす向け</span>
+          <h1>道路の凸凹を伝える<span class="sidebar-title-ending">アプリ<span class="pill sidebar-profile" id="profilePill">車いす向け</span></span></h1>
         </div>
         <button class="settings-button" type="button" id="settingsButton" aria-expanded="false" aria-controls="settingsPanel" aria-label="設定を開く" title="設定を開く">
           <i data-lucide="settings" aria-hidden="true"></i>
