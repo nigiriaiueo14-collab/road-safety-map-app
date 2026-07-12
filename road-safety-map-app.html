@@ -1193,6 +1193,7 @@
       ? window.supabase.createClient(supabaseSettings.url, supabaseSettings.anonKey)
       : null;
     const hazardVisibleZoom = 11;
+    const hazardDraftZoom = 17;
     const kagawaCenter = [34.275, 133.95];
     const kagawaBounds = [
       [34.02, 133.43],
@@ -1733,6 +1734,11 @@
         })
       }).addTo(realMap);
       draftMarker.bindTooltip("投稿する場所", { direction: "top", offset: [0, -16] });
+      draftMarker.openTooltip();
+      realMap.flyTo(draftPlace, Math.max(realMap.getZoom(), hazardDraftZoom), {
+        animate: true,
+        duration: 0.55
+      });
 
       const lat = draftPlace[0].toFixed(5);
       const lng = draftPlace[1].toFixed(5);
