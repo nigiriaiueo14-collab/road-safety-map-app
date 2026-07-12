@@ -470,46 +470,52 @@
       top: 92px;
       z-index: 1000;
       display: grid;
-      gap: 8px;
-      width: min(180px, calc(100% - 32px));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      width: min(270px, calc(100% - 32px));
     }
 
     .map-tool {
-      min-height: 38px;
-      padding: 0 12px;
-      border-radius: 8px;
+      min-height: 32px;
+      padding: 0 7px;
+      border-radius: 7px;
       color: var(--ink);
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
       font-weight: 800;
-      text-align: left;
+      font-size: 12px;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .map-tool:hover { background: #f5f9fb; }
 
     .legend {
+      grid-column: 1 / -1;
       display: grid;
-      gap: 7px;
-      padding: 10px 12px;
-      border-radius: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px 10px;
+      padding: 7px 9px;
+      border-radius: 7px;
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.35;
     }
 
     .legend-row {
-      display: flex;
-      gap: 8px;
+      display: inline-flex;
+      gap: 6px;
       align-items: center;
+      white-space: nowrap;
     }
 
     .legend-dot {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       box-shadow: inset 0 0 0 2px #fff;
       flex: 0 0 auto;
@@ -519,8 +525,8 @@
     .legend-dot.medium { background: var(--warn); }
     .legend-dot.low { background: var(--safe); }
     .legend-line {
-      width: 22px;
-      height: 4px;
+      width: 18px;
+      height: 3px;
       border-radius: 999px;
       background: #2378ff;
       flex: 0 0 auto;
@@ -914,8 +920,7 @@
       .sidebar, .details { border: 0; }
       .map-wrap { min-height: 620px; order: -1; }
       .topbar { top: 10px; left: 10px; right: 10px; }
-      .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .legend { grid-column: 1 / -1; }
+      .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; }
       .row, .mode-grid, .device-grid { grid-template-columns: 1fr; }
     }
 </style>
