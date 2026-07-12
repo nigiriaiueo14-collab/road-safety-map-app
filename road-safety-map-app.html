@@ -1226,6 +1226,9 @@
     let currentUserEmail = "";
     let isAutoRerouting = false;
     let lastAutoRerouteAt = 0;
+    let hazardRerouteTimer;
+    const pendingHazardRerouteIds = new Set();
+    const handledHazardRerouteIds = new Set();
     let alertMethod = localStorage.getItem(alertMethodStorageKey) === "vibration" ? "vibration" : "notification";
     let lastNearbyAlertAt = 0;
     const nearbyAlertedHazards = new Set();
@@ -1360,8 +1363,10 @@
       };
     }
 
-    async function loadSharedHazards() {
+    async function loadSharedHazards(options = {}) {
       if (!supabaseClient) return false;
+      const detectNewHazards = Boolean(options.detectNewHazards);
+      const previousHazardIds = new Set(hazards.map((hazard) => hazard.id));
       const { data, error } = await supabaseClient
         .from("hazards")
         .select("id, place, type, level, note, lat, lng, targets, created_at")
@@ -1372,10 +1377,15 @@
         return false;
       }
 
-      hazards = (data || []).map(mapSharedHazard);
+      const nextHazards = (data || []).map(mapSharedHazard);
+      const newHazards = detectNewHazards
+        ? nextHazards.filter((hazard) => !previousHazardIds.has(hazard.id))
+        : [];
+      hazards = nextHazards;
       saveHazards();
       if (selectedId && !hazards.some((hazard) => hazard.id === selectedId)) selectedId = null;
       render();
+      if (newHazards.length) queueHazardRouteRecalculation(newHazards);
       return true;
     }
 
@@ -1386,12 +1396,17 @@
       hazardRealtimeChannel = supabaseClient
         .channel("shared-hazards")
         .on("postgres_changes", { event: "*", schema: "public", table: "hazards" }, () => {
-          loadSharedHazards();
+          loadSharedHazards({ detectNewHazards: true });
         })
         .subscribe();
     }
 
     function stopHazardSync() {
+      if (hazardRerouteTimer) {
+        window.clearTimeout(hazardRerouteTimer);
+        hazardRerouteTimer = undefined;
+      }
+      pendingHazardRerouteIds.clear();
       if (!supabaseClient || !hazardRealtimeChannel) return;
       supabaseClient.removeChannel(hazardRealtimeChannel);
       hazardRealtimeChannel = undefined;
@@ -1803,6 +1818,7 @@
       saveHazards();
       render();
       showAlert(hazard);
+      queueHazardRouteRecalculation([hazard]);
     }
 
     function recalcRoute() {
@@ -1881,6 +1897,7 @@
       }
 
       checkRouteDeviation();
+      scheduleHazardRouteRecalculation();
     }
 
     function startLocationWatch() {
@@ -2005,6 +2022,7 @@
         guidePreview.innerHTML = "<p>現在地に合わせた再計算ができませんでした。少し移動してからもう一度試してください。</p>";
       } finally {
         isAutoRerouting = false;
+        scheduleHazardRouteRecalculation();
       }
     }
 
@@ -2021,6 +2039,56 @@
         }
         return false;
       });
+    }
+
+    function queueHazardRouteRecalculation(newHazards) {
+      if (!currentRoutePoints.length || !Array.isArray(newHazards) || !newHazards.length) return;
+      const routeHazardIds = new Set(findHazardsOnRoute(currentRoutePoints).map((hazard) => hazard.id));
+      newHazards.forEach((hazard) => {
+        if (routeHazardIds.has(hazard.id) && !handledHazardRerouteIds.has(hazard.id)) {
+          pendingHazardRerouteIds.add(hazard.id);
+        }
+      });
+      scheduleHazardRouteRecalculation();
+    }
+
+    function scheduleHazardRouteRecalculation() {
+      if (
+        !pendingHazardRerouteIds.size
+        || hazardRerouteTimer
+        || isAutoRerouting
+        || !currentLatLng
+        || !currentRoutePoints.length
+      ) return;
+
+      hazardRerouteTimer = window.setTimeout(() => {
+        hazardRerouteTimer = undefined;
+        runPendingHazardRouteRecalculation();
+      }, 350);
+    }
+
+    async function runPendingHazardRouteRecalculation() {
+      if (isAutoRerouting || !currentLatLng || !currentRoutePoints.length) return;
+      const routeHazardIds = new Set(findHazardsOnRoute(currentRoutePoints).map((hazard) => hazard.id));
+      const hazardIds = [...pendingHazardRerouteIds].filter((id) => routeHazardIds.has(id));
+      pendingHazardRerouteIds.clear();
+      if (!hazardIds.length) return;
+
+      hazardIds.forEach((id) => handledHazardRerouteIds.add(id));
+      isAutoRerouting = true;
+      lastAutoRerouteAt = Date.now();
+      routeStatus.textContent = "ルート上の危険が増えたため再計算中";
+      guidePreview.innerHTML = `<p>${hazardIds.length}件の新しい危険情報を反映して、安全なルートを再計算しています。</p>`;
+
+      try {
+        await startRouteGuide({ isAutoReroute: true, isHazardUpdate: true });
+      } catch (error) {
+        routeStatus.textContent = "新しい危険情報によるルートの再計算に失敗しました";
+        guidePreview.innerHTML = "<p>新しい危険情報を受信しましたが、ルートを再計算できませんでした。</p>";
+      } finally {
+        isAutoRerouting = false;
+        scheduleHazardRouteRecalculation();
+      }
     }
 
     function clampToKagawa(point) {
@@ -2539,6 +2607,7 @@
       const destination = getSelectedDestination();
       if (!destination) return;
       const isAutoReroute = Boolean(options.isAutoReroute);
+      const isHazardUpdate = Boolean(options.isHazardUpdate);
       if (!isAutoReroute) stopVoiceGuide();
 
       if (!currentLatLng) {
@@ -2550,15 +2619,24 @@
       }
 
       const destinationLatLng = [destination.lat, destination.lng];
-      routeStatus.textContent = isAutoReroute
-        ? "現在地から新しいルートを再計算中"
-        : `${destination.name}までのルートを計算中`;
-      guidePreview.innerHTML = isAutoReroute
-        ? "<p>現在地に合わせて、新しいルートを計算しています。</p>"
-        : "<p>道路に沿ったルートを計算しています。</p>";
+      routeStatus.textContent = isHazardUpdate
+        ? "ルート上の新しい危険情報を反映して再計算中"
+        : isAutoReroute
+          ? "現在地から新しいルートを再計算中"
+          : `${destination.name}までのルートを計算中`;
+      guidePreview.innerHTML = isHazardUpdate
+        ? "<p>ルート上の新しい危険情報を反映して、安全なルートを計算しています。</p>"
+        : isAutoReroute
+          ? "<p>現在地に合わせて、新しいルートを計算しています。</p>"
+          : "<p>道路に沿ったルートを計算しています。</p>";
 
       const roadRoute = await fetchRoadRoute(currentLatLng, destinationLatLng);
       if (!roadRoute) {
+        if (isHazardUpdate) {
+          routeStatus.textContent = "新しい危険情報を受信しましたが再計算できませんでした";
+          guidePreview.innerHTML = "<p>新しい危険情報を受信しましたが、ルートを再計算できなかったため現在のルートを表示しています。</p>";
+          return;
+        }
         clearGuideRoute();
         currentRoutePoints = [];
         renderList();
@@ -2622,9 +2700,11 @@
       focusRouteOnMap(routeData.points);
       routeStatus.textContent = routeChangedForSafety
         ? `${destination.name}まで迂回ルートを表示中`
-        : isAutoReroute
-          ? `${destination.name}までのルートを再計算しました`
-          : `${destination.name}までのルートを表示中`;
+        : isHazardUpdate
+          ? `新しい危険情報を反映して${destination.name}までのルートを再計算しました`
+          : isAutoReroute
+            ? `${destination.name}までのルートを再計算しました`
+            : `${destination.name}までのルートを表示中`;
       startLocationWatch();
       const stepItems = routeData.steps.length ? routeData.steps : [
         `${destination.name}まで青いルートに沿って進みます。`,
@@ -2639,7 +2719,9 @@
       ];
       const routeNotice = routeChangedForSafety
         ? `<p class="route-notice">${avoidedHazardCount > 0 ? `${avoidedHazardCount}件の危険ピンを避け、` : "危険度の高い地点を避け、"}遠回りになりすぎない安全ルートに変更しました。</p>`
-        : "";
+        : isHazardUpdate
+          ? '<p class="route-notice">新しい危険情報を反映してルートを再計算しました。</p>'
+          : "";
       guidePreview.innerHTML = `
         <div class="route-summary">
           <div class="route-title">
