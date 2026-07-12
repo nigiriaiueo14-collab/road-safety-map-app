@@ -25,18 +25,6 @@
 
     * { box-sizing: border-box; }
 
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
     body {
       margin: 0;
       min-height: 100vh;
@@ -55,7 +43,7 @@
     .app {
       min-height: 100vh;
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
+      grid-template-columns: 320px minmax(0, 1fr) 360px;
     }
 
     @media (min-width: 1041px) {
@@ -71,7 +59,7 @@
         min-height: 0;
       }
 
-      .sidebar {
+      .sidebar, .details {
         height: 100%;
         min-height: 0;
         overflow-y: auto;
@@ -133,14 +121,17 @@
       gap: 8px;
     }
 
-    .sidebar {
+    .sidebar, .details {
       padding: 18px;
       background: rgba(255, 255, 255, 0.9);
       border-right: 1px solid var(--line);
       overflow: auto;
     }
 
-    .conditional-panel[hidden] { display: none; }
+    .details {
+      border-right: 0;
+      border-left: 1px solid var(--line);
+    }
 
     h1 {
       margin: 0;
@@ -168,24 +159,6 @@
       gap: 10px;
       align-items: start;
       margin-bottom: 18px;
-    }
-
-    .sidebar-title {
-      min-width: 0;
-    }
-
-    .sidebar-profile {
-      min-height: 24px;
-      display: inline-flex;
-      align-items: center;
-      margin-top: 7px;
-      padding: 0 9px;
-      border-radius: 999px;
-      color: var(--blue);
-      background: var(--blue-soft);
-      border: 1px solid rgba(47, 111, 199, 0.2);
-      font-size: 12px;
-      font-weight: 800;
     }
 
     .settings-button {
@@ -362,49 +335,6 @@
     .hazard-composer[hidden], .hazard-details[hidden], .place-picking-help[hidden] { display: none; }
     .hazard-cancel-button { margin-top: 8px; }
 
-    .hazard-composer-title { display: none; }
-
-    .draft-form-tooltip {
-      width: min(330px, calc(100vw - 40px));
-      max-width: none;
-      max-height: min(560px, calc(100dvh - 70px));
-      padding: 0;
-      overflow-y: auto;
-      white-space: normal;
-      color: var(--ink);
-      background: transparent;
-      border: 0;
-      border-radius: 10px;
-      box-shadow: var(--shadow);
-    }
-
-    .draft-form-tooltip::before { display: none; }
-
-    .draft-form-tooltip .hazard-composer {
-      width: 100%;
-      margin: 0;
-      padding: 15px;
-      background: rgba(255, 255, 255, 0.98);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-    }
-
-    .draft-form-tooltip .hazard-composer-title {
-      display: block;
-      margin: 0 0 8px;
-      font-size: 17px;
-      line-height: 1.35;
-    }
-
-    .draft-form-tooltip .selected-place {
-      max-height: 64px;
-      overflow: hidden;
-      font-size: 11px;
-    }
-
-    .draft-form-tooltip label { margin: 8px 0; }
-    .draft-form-tooltip textarea { min-height: 68px; }
-
     .map-wrap {
       position: relative;
       min-width: 0;
@@ -412,16 +342,51 @@
       background: #dce8ee;
     }
 
-    .map-wrap.hazard-form-open .map-tools,
-    .map-wrap.hazard-form-open .map-note {
-      visibility: hidden;
-      pointer-events: none;
+    .topbar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
     }
 
-    .map-wrap.hazard-place-picking .map-tools,
-    .map-wrap.hazard-place-picking .map-note {
-      visibility: hidden;
-      pointer-events: none;
+    .status {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .map-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     .account-bar {
@@ -446,55 +411,49 @@
     .map-tools {
       position: absolute;
       right: 16px;
-      top: 16px;
+      top: 92px;
       z-index: 1000;
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
-      width: min(270px, calc(100% - 32px));
+      gap: 8px;
+      width: min(180px, calc(100% - 32px));
     }
 
     .map-tool {
-      min-height: 32px;
-      padding: 0 7px;
-      border-radius: 7px;
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 8px;
       color: var(--ink);
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
       font-weight: 800;
-      font-size: 12px;
-      text-align: center;
-      white-space: nowrap;
+      text-align: left;
     }
 
     .map-tool:hover { background: #f5f9fb; }
 
     .legend {
-      grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 5px 10px;
-      padding: 7px 9px;
-      border-radius: 7px;
+      gap: 7px;
+      padding: 10px 12px;
+      border-radius: 8px;
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       box-shadow: 0 8px 22px rgba(32, 36, 39, 0.12);
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       line-height: 1.35;
     }
 
     .legend-row {
-      display: inline-flex;
-      gap: 6px;
+      display: flex;
+      gap: 8px;
       align-items: center;
-      white-space: nowrap;
     }
 
     .legend-dot {
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       box-shadow: inset 0 0 0 2px #fff;
       flex: 0 0 auto;
@@ -504,8 +463,8 @@
     .legend-dot.medium { background: var(--warn); }
     .legend-dot.low { background: var(--safe); }
     .legend-line {
-      width: 18px;
-      height: 3px;
+      width: 22px;
+      height: 4px;
       border-radius: 999px;
       background: #2378ff;
       flex: 0 0 auto;
@@ -726,57 +685,55 @@
     }
 
     .route-title {
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
-      align-items: center;
+      min-width: 0;
+      display: grid;
+      gap: 3px;
     }
 
-    .route-time {
-      min-width: 108px;
-      display: grid;
-      justify-items: center;
-      gap: 3px;
-      padding: 10px 13px 9px;
-      border: 1px solid rgba(47, 111, 199, 0.22);
-      border-radius: 12px;
-      color: var(--blue);
-      background: linear-gradient(145deg, #f4f8ff, var(--blue-soft));
-      box-shadow: 0 7px 18px rgba(47, 111, 199, 0.12);
+    .route-destination {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .route-time-label {
-      display: inline-flex;
-      align-items: center;
+    .route-source {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .route-arrival-card {
+      min-width: 0;
+      display: grid;
       gap: 4px;
-      color: #55708f;
-      font-size: 11px;
-      line-height: 1.2;
+      padding: 11px 12px;
+      overflow: hidden;
+      border: 1px solid #c9dcff;
+      border-radius: 8px;
+      background: var(--blue-soft);
+    }
+
+    .route-arrival-label {
+      color: #46678f;
+      font-size: 12px;
+      line-height: 1.4;
       font-weight: 800;
-      letter-spacing: 0.06em;
     }
 
-    .route-time-label::before {
-      content: "";
-      width: 11px;
-      height: 11px;
-      border: 1.8px solid currentColor;
-      border-radius: 50%;
-      background: linear-gradient(90deg, transparent 46%, currentColor 47% 53%, transparent 54%) center 2px / 100% 4px no-repeat;
-    }
-
-    .route-time-value {
-      font-size: 27px;
-      line-height: 1.05;
+    .guide-panel .route-time {
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: keep-all;
+      font-size: 26px;
+      line-height: 1.15;
       font-weight: 900;
-      letter-spacing: -0.04em;
-    }
-
-    @media (max-width: 430px) {
-      .route-title { align-items: stretch; }
-      .route-time { min-width: 96px; padding-inline: 10px; }
-      .route-time-value { font-size: 24px; }
+      font-variant-numeric: tabular-nums;
+      color: #2378ff;
     }
 
     .route-meta {
@@ -930,14 +887,17 @@
 
     @media (max-width: 1040px) {
       .app { grid-template-columns: 300px 1fr; }
+      .details { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
       .map-wrap { min-height: 720px; }
     }
 
     @media (max-width: 760px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar { border: 0; }
+      .sidebar, .details { border: 0; }
       .map-wrap { min-height: 620px; order: -1; }
-      .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; }
+      .topbar { top: 10px; left: 10px; right: 10px; }
+      .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .legend { grid-column: 1 / -1; }
       .row, .mode-grid, .device-grid { grid-template-columns: 1fr; }
     }
 </style>
@@ -965,10 +925,7 @@
   <main class="app">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-title">
-          <h1>道路の凸凹を伝えるアプリ</h1>
-          <span class="sidebar-profile" id="profilePill">車いす向け</span>
-        </div>
+        <h1>道路の凸凹を伝えるアプリ</h1>
         <button class="settings-button" type="button" id="settingsButton" aria-expanded="false" aria-controls="settingsPanel" aria-label="設定を開く" title="設定を開く">
           <i data-lucide="settings" aria-hidden="true"></i>
         </button>
@@ -1059,64 +1016,49 @@
       <section class="section">
         <h2>危険を投稿</h2>
         <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
-        <div id="hazardComposerHome">
-          <div class="hazard-composer" id="hazardComposer" hidden>
-            <h3 class="hazard-composer-title">危険を投稿</h3>
-            <p class="helper-text place-picking-help" id="placePickingHelp">地図上の危険があった場所をクリックしてください。</p>
-            <div class="hazard-details" id="hazardDetails" hidden>
-              <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
-              <div class="row">
-                <label>種類
-                  <select id="typeInput">
-                    <option value="凸凹">凸凹</option>
-                    <option value="段差">段差</option>
-                    <option value="舗装はがれ">舗装はがれ</option>
-                    <option value="急な坂">急な坂</option>
-                    <option value="狭い道">狭い道</option>
-                  </select>
-                </label>
-                <label>危険度
-                  <select id="levelInput">
-                    <option value="medium">注意</option>
-                    <option value="high">危険</option>
-                    <option value="low">少し注意</option>
-                  </select>
-                </label>
-              </div>
-              <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
-              <button class="primary" type="button" id="addButton">この場所を共有</button>
+        <div class="hazard-composer" id="hazardComposer" hidden>
+          <p class="helper-text place-picking-help" id="placePickingHelp">地図上の危険があった場所をクリックしてください。</p>
+          <div class="hazard-details" id="hazardDetails" hidden>
+            <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
+            <div class="row">
+              <label>種類
+                <select id="typeInput">
+                  <option value="凸凹">凸凹</option>
+                  <option value="段差">段差</option>
+                  <option value="舗装はがれ">舗装はがれ</option>
+                  <option value="急な坂">急な坂</option>
+                  <option value="狭い道">狭い道</option>
+                </select>
+              </label>
+              <label>危険度
+                <select id="levelInput">
+                  <option value="medium">注意</option>
+                  <option value="high">危険</option>
+                  <option value="low">少し注意</option>
+                </select>
+              </label>
             </div>
-            <button class="secondary hazard-cancel-button" type="button" id="cancelPlaceButton">キャンセル</button>
+            <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
+            <button class="primary" type="button" id="addButton">この場所を共有</button>
           </div>
+          <button class="secondary hazard-cancel-button" type="button" id="cancelPlaceButton">キャンセル</button>
         </div>
-      </section>
-
-      <section class="section summary conditional-panel" id="selectedHazardSection" hidden>
-        <h2>選択中の危険</h2>
-        <div class="danger-preview" id="selectedPreview"></div>
-      </section>
-
-      <section class="section summary conditional-panel" id="routeGuideSection" hidden>
-        <h2>ルート案内</h2>
-        <div class="guide-panel" id="guidePreview">
-          <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
-        </div>
-      </section>
-
-      <section class="section conditional-panel" id="routeHazardsSection" hidden>
-        <h2>ルート上にある共有された危険</h2>
-        <div class="list" id="hazardList"></div>
       </section>
 
       </div>
     </aside>
 
     <section class="map-wrap" aria-label="危険共有マップ">
-      <div class="visually-hidden" aria-live="polite" aria-atomic="true">
-        <span id="routeStatus">危険ピンを表示中</span>
-        <span id="locationStatus">現在地は未表示</span>
+      <div class="topbar">
+        <div class="status">
+          <span class="pill" id="profilePill">車いす向け</span>
+          <span id="routeStatus">危険ピンを表示中</span>
+          <span id="locationStatus" aria-live="polite">現在地は未表示</span>
+        </div>
+        <div class="map-actions">
+          <button class="secondary" type="button" id="locationButton">現在地を表示</button>
+        </div>
       </div>
-      <button type="button" id="locationButton" hidden>現在地を表示</button>
 
       <div class="map" id="map"></div>
       <div class="map-tools" aria-label="地図操作">
@@ -1138,6 +1080,29 @@
       </div>
     </section>
 
+    <aside class="details">
+      <div class="details-content" id="detailsContent">
+        <section class="section summary">
+          <h2>ルート案内</h2>
+          <div class="guide-panel" id="guidePreview">
+            <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
+          </div>
+        </section>
+
+        <section class="section summary">
+          <h2>選択中の危険</h2>
+          <div class="danger-preview" id="selectedPreview">
+            <p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ルート上にある共有された危険</h2>
+          <div class="list" id="hazardList"></div>
+        </section>
+      </div>
+
+    </aside>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1205,17 +1170,12 @@
     const modeGrid = document.querySelector("#modeGrid");
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
-    const mapWrap = document.querySelector(".map-wrap");
-    const selectedHazardSection = document.querySelector("#selectedHazardSection");
-    const routeGuideSection = document.querySelector("#routeGuideSection");
-    const routeHazardsSection = document.querySelector("#routeHazardsSection");
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
     const guidePreview = document.querySelector("#guidePreview");
     const addButton = document.querySelector("#addButton");
     const pickPlaceButton = document.querySelector("#pickPlaceButton");
     const cancelPlaceButton = document.querySelector("#cancelPlaceButton");
-    const hazardComposerHome = document.querySelector("#hazardComposerHome");
     const hazardComposer = document.querySelector("#hazardComposer");
     const hazardDetails = document.querySelector("#hazardDetails");
     const placePickingHelp = document.querySelector("#placePickingHelp");
@@ -1273,7 +1233,6 @@
     let customDestination;
     let draftPlace;
     let draftMarker;
-    let draftFormTooltip;
     let isPickingPlace = false;
     let placePickRequestId = 0;
     let pendingGuide = false;
@@ -1292,10 +1251,6 @@
       scrollWheelZoom: true
     }).setView(kagawaCenter, 9);
 
-    const draftFormPane = realMap.createPane("draftFormPane");
-    draftFormPane.style.zIndex = "1100";
-    draftFormPane.style.pointerEvents = "auto";
-
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -1303,13 +1258,10 @@
 
     L.DomEvent.disableClickPropagation(mapTools);
     L.DomEvent.disableScrollPropagation(mapTools);
-    L.DomEvent.disableClickPropagation(hazardComposer);
-    L.DomEvent.disableScrollPropagation(hazardComposer);
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     function openApp(email) {
       currentUserEmail = String(email || "").toLowerCase();
-      resetConditionalPanels();
       settingsButton.setAttribute("aria-expanded", "false");
       settingsButton.setAttribute("aria-label", "設定を開く");
       settingsButton.title = "設定を開く";
@@ -1343,7 +1295,6 @@
         await supabaseClient.auth.signOut();
       }
       document.body.classList.remove("logged-in");
-      resetConditionalPanels();
       passwordInput.value = "";
       loginError.textContent = "";
       currentUserEmail = "";
@@ -1476,19 +1427,6 @@
       return hazard.targets.includes(mode);
     }
 
-    function resetConditionalPanels() {
-      selectedId = null;
-      selectedHazardSection.hidden = true;
-      routeGuideSection.hidden = true;
-      routeHazardsSection.hidden = true;
-    }
-
-    function showRoutePanels() {
-      routeGuideSection.hidden = false;
-      routeHazardsSection.hidden = false;
-      renderList();
-    }
-
     function render() {
       profilePill.textContent = `${labels[mode]}向け`;
       document.querySelectorAll(".mode").forEach((button) => {
@@ -1563,11 +1501,9 @@
     function renderSelected() {
       const hazard = hazards.find((item) => item.id === selectedId);
       if (!hazard) {
-        selectedHazardSection.hidden = true;
-        selectedPreview.innerHTML = "";
+        selectedPreview.innerHTML = "<p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>";
         return;
       }
-      selectedHazardSection.hidden = false;
       const warning = isRelevant(hazard)
         ? `${labels[mode]}では特に注意が必要です。`
         : `${labels[mode]}では優先度は低めですが、通行時は確認してください。`;
@@ -1593,8 +1529,7 @@
       }
       selectedId = null;
       await loadSharedHazards();
-      selectedHazardSection.hidden = true;
-      selectedPreview.innerHTML = "";
+      selectedPreview.innerHTML = "<p>危険ピンを削除しました。</p>";
       if (hazard) {
         alertTitle.textContent = "危険ピンを削除しました";
         alertText.textContent = `${hazard.type}の投稿をマップから消去しました。`;
@@ -1611,9 +1546,6 @@
       if (hazard) {
         realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), hazardVisibleZoom));
         showAlert(hazard);
-        window.requestAnimationFrame(() => {
-          selectedHazardSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        });
       }
     }
 
@@ -1725,15 +1657,6 @@
       isPickingPlace = false;
       draftPlace = null;
       realMap.getContainer().style.cursor = "";
-      mapWrap.classList.remove("hazard-place-picking");
-      mapWrap.classList.remove("hazard-form-open");
-      if (hazardComposer.parentElement !== hazardComposerHome) {
-        hazardComposerHome.appendChild(hazardComposer);
-      }
-      if (draftFormTooltip) {
-        draftFormTooltip.remove();
-        draftFormTooltip = null;
-      }
       if (draftMarker) {
         draftMarker.remove();
         draftMarker = null;
@@ -1762,7 +1685,6 @@
     function startPlacePicking() {
       resetHazardPostForm(true);
       isPickingPlace = true;
-      mapWrap.classList.add("hazard-place-picking");
       hazardComposer.hidden = false;
       pickPlaceButton.textContent = "地図をクリックしてください";
       pickPlaceButton.disabled = true;
@@ -1771,11 +1693,6 @@
       realMap.getContainer().style.cursor = "crosshair";
       if (realMap.getZoom() < hazardVisibleZoom) {
         realMap.setZoom(hazardVisibleZoom);
-      }
-      if (window.matchMedia("(max-width: 760px)").matches) {
-        window.requestAnimationFrame(() => {
-          mapWrap.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
       }
     }
 
@@ -1816,7 +1733,6 @@
 
       draftPlace = [latlng.lat, latlng.lng];
       isPickingPlace = false;
-      mapWrap.classList.remove("hazard-place-picking");
       pickPlaceButton.textContent = "地図で場所を選ぶ";
       pickPlaceButton.disabled = false;
       pickPlaceButton.hidden = true;
@@ -1834,33 +1750,6 @@
         })
       }).addTo(realMap);
       draftMarker.bindTooltip("投稿する場所", { direction: "top", offset: [0, -16] });
-
-      const compactMap = window.matchMedia("(max-width: 760px)").matches;
-      draftFormTooltip = L.tooltip({
-        permanent: true,
-        interactive: true,
-        pane: "draftFormPane",
-        direction: compactMap ? "top" : "right",
-        offset: compactMap ? [0, -24] : [24, 0],
-        opacity: 1,
-        className: "draft-form-tooltip"
-      })
-        .setLatLng(draftPlace)
-        .setContent(hazardComposer)
-        .addTo(realMap);
-      mapWrap.classList.add("hazard-form-open");
-
-      if (compactMap) {
-        realMap.panInside(draftPlace, {
-          paddingTopLeft: [24, 500],
-          paddingBottomRight: [24, 40]
-        });
-      } else {
-        realMap.panInside(draftPlace, {
-          paddingTopLeft: [50, 130],
-          paddingBottomRight: [390, 50]
-        });
-      }
 
       const lat = draftPlace[0].toFixed(5);
       const lng = draftPlace[1].toFixed(5);
@@ -2467,7 +2356,6 @@
 
     function setDestinationFromSearch(result) {
       if (!result || !isInKagawa(result.lat, result.lng)) return;
-      showRoutePanels();
       stopVoiceGuide();
       customDestination = { name: result.name, lat: result.lat, lng: result.lng };
       destinationInput.value = "";
@@ -2513,7 +2401,6 @@
         showKagawaOverview("香川県内の行きたい先をクリックしてください");
         return;
       }
-      showRoutePanels();
       stopVoiceGuide();
       customDestination = {
         name: "地図で選んだ目的地",
@@ -2532,7 +2419,6 @@
     }
 
     function selectPresetDestination() {
-      showRoutePanels();
       customDestination = null;
       const destination = getSelectedDestination();
       updateDestinationText(destination);
@@ -2665,7 +2551,6 @@
     async function startRouteGuide(options = {}) {
       const destination = getSelectedDestination();
       if (!destination) return;
-      showRoutePanels();
       const isAutoReroute = Boolean(options.isAutoReroute);
       if (!isAutoReroute) stopVoiceGuide();
 
@@ -2771,14 +2656,12 @@
       guidePreview.innerHTML = `
         <div class="route-summary">
           <div class="route-title">
-            <div>
-              <strong>現在地から${escapeHtml(destination.name)}</strong>
-              <p>${routeData.source}を使った案内</p>
-            </div>
-            <div class="route-time" aria-label="目的地への到着予測時間 ${travelTimeText}">
-              <span class="route-time-label">到着予測</span>
-              <span class="route-time-value">${travelTimeText}</span>
-            </div>
+            <strong class="route-destination" title="現在地から${escapeHtml(destination.name)}">現在地から${escapeHtml(destination.name)}</strong>
+            <p class="route-source">${escapeHtml(routeData.source)}を使った案内</p>
+          </div>
+          <div class="route-arrival-card" aria-label="到着予測時間 ${travelTimeText}">
+            <span class="route-arrival-label">到着予測時間</span>
+            <strong class="route-time">${travelTimeText}</strong>
           </div>
           <div class="route-meta">
             <span class="route-chip">${labels[mode]}</span>
