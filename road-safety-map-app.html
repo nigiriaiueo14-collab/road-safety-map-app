@@ -335,11 +335,67 @@
     .hazard-composer[hidden], .hazard-details[hidden], .place-picking-help[hidden] { display: none; }
     .hazard-cancel-button { margin-top: 8px; }
 
+    .hazard-composer-title { display: none; }
+
+    .draft-form-tooltip {
+      width: min(330px, calc(100vw - 40px));
+      max-width: none;
+      max-height: min(560px, calc(100dvh - 70px));
+      padding: 0;
+      overflow-y: auto;
+      white-space: normal;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .draft-form-tooltip::before { display: none; }
+
+    .draft-form-tooltip .hazard-composer {
+      width: 100%;
+      margin: 0;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .draft-form-tooltip .hazard-composer-title {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .draft-form-tooltip .selected-place {
+      max-height: 64px;
+      overflow: hidden;
+      font-size: 11px;
+    }
+
+    .draft-form-tooltip label { margin: 8px 0; }
+    .draft-form-tooltip textarea { min-height: 68px; }
+
     .map-wrap {
       position: relative;
       min-width: 0;
       overflow: hidden;
       background: #dce8ee;
+    }
+
+    .map-wrap.hazard-form-open .topbar,
+    .map-wrap.hazard-form-open .map-tools,
+    .map-wrap.hazard-form-open .map-note {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .map-wrap.hazard-place-picking .map-tools,
+    .map-wrap.hazard-place-picking .map-note {
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .topbar {
@@ -978,32 +1034,35 @@
       <section class="section">
         <h2>危険を投稿</h2>
         <button class="secondary" type="button" id="pickPlaceButton">地図で場所を選ぶ</button>
-        <div class="hazard-composer" id="hazardComposer" hidden>
-          <p class="helper-text place-picking-help" id="placePickingHelp">地図上の危険があった場所をクリックしてください。</p>
-          <div class="hazard-details" id="hazardDetails" hidden>
-            <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
-            <div class="row">
-              <label>種類
-                <select id="typeInput">
-                  <option value="凸凹">凸凹</option>
-                  <option value="段差">段差</option>
-                  <option value="舗装はがれ">舗装はがれ</option>
-                  <option value="急な坂">急な坂</option>
-                  <option value="狭い道">狭い道</option>
-                </select>
-              </label>
-              <label>危険度
-                <select id="levelInput">
-                  <option value="medium">注意</option>
-                  <option value="high">危険</option>
-                  <option value="low">少し注意</option>
-                </select>
-              </label>
+        <div id="hazardComposerHome">
+          <div class="hazard-composer" id="hazardComposer" hidden>
+            <h3 class="hazard-composer-title">危険を投稿</h3>
+            <p class="helper-text place-picking-help" id="placePickingHelp">地図上の危険があった場所をクリックしてください。</p>
+            <div class="hazard-details" id="hazardDetails" hidden>
+              <div class="selected-place" id="selectedPlaceText">投稿場所はまだ選ばれていません。</div>
+              <div class="row">
+                <label>種類
+                  <select id="typeInput">
+                    <option value="凸凹">凸凹</option>
+                    <option value="段差">段差</option>
+                    <option value="舗装はがれ">舗装はがれ</option>
+                    <option value="急な坂">急な坂</option>
+                    <option value="狭い道">狭い道</option>
+                  </select>
+                </label>
+                <label>危険度
+                  <select id="levelInput">
+                    <option value="medium">注意</option>
+                    <option value="high">危険</option>
+                    <option value="low">少し注意</option>
+                  </select>
+                </label>
+              </div>
+              <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
+              <button class="primary" type="button" id="addButton">この場所を共有</button>
             </div>
-            <label>メモ<textarea id="noteInput" placeholder="タイルが浮いていて、前輪が引っかかりやすいです。"></textarea></label>
-            <button class="primary" type="button" id="addButton">この場所を共有</button>
+            <button class="secondary hazard-cancel-button" type="button" id="cancelPlaceButton">キャンセル</button>
           </div>
-          <button class="secondary hazard-cancel-button" type="button" id="cancelPlaceButton">キャンセル</button>
         </div>
       </section>
 
@@ -1132,12 +1191,14 @@
     const modeGrid = document.querySelector("#modeGrid");
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
+    const mapWrap = document.querySelector(".map-wrap");
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
     const guidePreview = document.querySelector("#guidePreview");
     const addButton = document.querySelector("#addButton");
     const pickPlaceButton = document.querySelector("#pickPlaceButton");
     const cancelPlaceButton = document.querySelector("#cancelPlaceButton");
+    const hazardComposerHome = document.querySelector("#hazardComposerHome");
     const hazardComposer = document.querySelector("#hazardComposer");
     const hazardDetails = document.querySelector("#hazardDetails");
     const placePickingHelp = document.querySelector("#placePickingHelp");
@@ -1195,6 +1256,7 @@
     let customDestination;
     let draftPlace;
     let draftMarker;
+    let draftFormTooltip;
     let isPickingPlace = false;
     let placePickRequestId = 0;
     let pendingGuide = false;
@@ -1213,6 +1275,10 @@
       scrollWheelZoom: true
     }).setView(kagawaCenter, 9);
 
+    const draftFormPane = realMap.createPane("draftFormPane");
+    draftFormPane.style.zIndex = "1100";
+    draftFormPane.style.pointerEvents = "auto";
+
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -1220,6 +1286,8 @@
 
     L.DomEvent.disableClickPropagation(mapTools);
     L.DomEvent.disableScrollPropagation(mapTools);
+    L.DomEvent.disableClickPropagation(hazardComposer);
+    L.DomEvent.disableScrollPropagation(hazardComposer);
     realMap.fitBounds(kagawaBounds, { padding: [18, 18] });
 
     function openApp(email) {
@@ -1619,6 +1687,15 @@
       isPickingPlace = false;
       draftPlace = null;
       realMap.getContainer().style.cursor = "";
+      mapWrap.classList.remove("hazard-place-picking");
+      mapWrap.classList.remove("hazard-form-open");
+      if (hazardComposer.parentElement !== hazardComposerHome) {
+        hazardComposerHome.appendChild(hazardComposer);
+      }
+      if (draftFormTooltip) {
+        draftFormTooltip.remove();
+        draftFormTooltip = null;
+      }
       if (draftMarker) {
         draftMarker.remove();
         draftMarker = null;
@@ -1647,6 +1724,7 @@
     function startPlacePicking() {
       resetHazardPostForm(true);
       isPickingPlace = true;
+      mapWrap.classList.add("hazard-place-picking");
       hazardComposer.hidden = false;
       pickPlaceButton.textContent = "地図をクリックしてください";
       pickPlaceButton.disabled = true;
@@ -1655,6 +1733,11 @@
       realMap.getContainer().style.cursor = "crosshair";
       if (realMap.getZoom() < hazardVisibleZoom) {
         realMap.setZoom(hazardVisibleZoom);
+      }
+      if (window.matchMedia("(max-width: 760px)").matches) {
+        window.requestAnimationFrame(() => {
+          mapWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       }
     }
 
@@ -1695,6 +1778,7 @@
 
       draftPlace = [latlng.lat, latlng.lng];
       isPickingPlace = false;
+      mapWrap.classList.remove("hazard-place-picking");
       pickPlaceButton.textContent = "地図で場所を選ぶ";
       pickPlaceButton.disabled = false;
       pickPlaceButton.hidden = true;
@@ -1712,6 +1796,33 @@
         })
       }).addTo(realMap);
       draftMarker.bindTooltip("投稿する場所", { direction: "top", offset: [0, -16] });
+
+      const compactMap = window.matchMedia("(max-width: 760px)").matches;
+      draftFormTooltip = L.tooltip({
+        permanent: true,
+        interactive: true,
+        pane: "draftFormPane",
+        direction: compactMap ? "top" : "right",
+        offset: compactMap ? [0, -24] : [24, 0],
+        opacity: 1,
+        className: "draft-form-tooltip"
+      })
+        .setLatLng(draftPlace)
+        .setContent(hazardComposer)
+        .addTo(realMap);
+      mapWrap.classList.add("hazard-form-open");
+
+      if (compactMap) {
+        realMap.panInside(draftPlace, {
+          paddingTopLeft: [24, 500],
+          paddingBottomRight: [24, 40]
+        });
+      } else {
+        realMap.panInside(draftPlace, {
+          paddingTopLeft: [50, 130],
+          paddingBottomRight: [390, 50]
+        });
+      }
 
       const lat = draftPlace[0].toFixed(5);
       const lng = draftPlace[1].toFixed(5);
