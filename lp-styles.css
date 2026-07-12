@@ -29,6 +29,19 @@ body {
 button, input, select, textarea { font: inherit; }
 a { color: inherit; }
 
+:is(h1, h2, h3, p, li, figcaption, .audience-label) {
+  line-break: strict;
+  word-break: auto-phrase;
+}
+
+:is(h1, h2, h3, .hero-page-title) {
+  text-wrap: balance;
+}
+
+:is(p, li, figcaption) {
+  text-wrap: pretty;
+}
+
 .site-header {
   position: sticky;
   top: 0;
