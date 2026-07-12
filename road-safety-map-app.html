@@ -43,7 +43,7 @@
     .app {
       min-height: 100vh;
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr) 360px;
+      grid-template-columns: 320px minmax(0, 1fr);
     }
 
     @media (min-width: 1041px) {
@@ -59,7 +59,7 @@
         min-height: 0;
       }
 
-      .sidebar, .details {
+      .sidebar {
         height: 100%;
         min-height: 0;
         overflow-y: auto;
@@ -121,17 +121,14 @@
       gap: 8px;
     }
 
-    .sidebar, .details {
+    .sidebar {
       padding: 18px;
       background: rgba(255, 255, 255, 0.9);
       border-right: 1px solid var(--line);
       overflow: auto;
     }
 
-    .details {
-      border-right: 0;
-      border-left: 1px solid var(--line);
-    }
+    .conditional-panel[hidden] { display: none; }
 
     h1 {
       margin: 0;
@@ -911,13 +908,12 @@
 
     @media (max-width: 1040px) {
       .app { grid-template-columns: 300px 1fr; }
-      .details { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
       .map-wrap { min-height: 720px; }
     }
 
     @media (max-width: 760px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar, .details { border: 0; }
+      .sidebar { border: 0; }
       .map-wrap { min-height: 620px; order: -1; }
       .topbar { top: 10px; left: 10px; right: 10px; }
       .map-tools { top: auto; left: 10px; right: 10px; bottom: 74px; width: auto; }
@@ -1071,6 +1067,23 @@
         </div>
       </section>
 
+      <section class="section summary conditional-panel" id="selectedHazardSection" hidden>
+        <h2>選択中の危険</h2>
+        <div class="danger-preview" id="selectedPreview"></div>
+      </section>
+
+      <section class="section summary conditional-panel" id="routeGuideSection" hidden>
+        <h2>ルート案内</h2>
+        <div class="guide-panel" id="guidePreview">
+          <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
+        </div>
+      </section>
+
+      <section class="section conditional-panel" id="routeHazardsSection" hidden>
+        <h2>ルート上にある共有された危険</h2>
+        <div class="list" id="hazardList"></div>
+      </section>
+
       </div>
     </aside>
 
@@ -1106,29 +1119,6 @@
       </div>
     </section>
 
-    <aside class="details">
-      <div class="details-content" id="detailsContent">
-        <section class="section summary">
-          <h2>ルート案内</h2>
-          <div class="guide-panel" id="guidePreview">
-            <p>行きたい場所を選んで、現在地からルート案内を始められます。</p>
-          </div>
-        </section>
-
-        <section class="section summary">
-          <h2>選択中の危険</h2>
-          <div class="danger-preview" id="selectedPreview">
-            <p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>
-          </div>
-        </section>
-
-        <section class="section">
-          <h2>ルート上にある共有された危険</h2>
-          <div class="list" id="hazardList"></div>
-        </section>
-      </div>
-
-    </aside>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1197,6 +1187,9 @@
     const profilePill = document.querySelector("#profilePill");
     const map = document.querySelector("#map");
     const mapWrap = document.querySelector(".map-wrap");
+    const selectedHazardSection = document.querySelector("#selectedHazardSection");
+    const routeGuideSection = document.querySelector("#routeGuideSection");
+    const routeHazardsSection = document.querySelector("#routeHazardsSection");
     const list = document.querySelector("#hazardList");
     const selectedPreview = document.querySelector("#selectedPreview");
     const guidePreview = document.querySelector("#guidePreview");
@@ -1297,6 +1290,7 @@
 
     function openApp(email) {
       currentUserEmail = String(email || "").toLowerCase();
+      resetConditionalPanels();
       settingsButton.setAttribute("aria-expanded", "false");
       settingsButton.setAttribute("aria-label", "設定を開く");
       settingsButton.title = "設定を開く";
@@ -1330,6 +1324,7 @@
         await supabaseClient.auth.signOut();
       }
       document.body.classList.remove("logged-in");
+      resetConditionalPanels();
       passwordInput.value = "";
       loginError.textContent = "";
       currentUserEmail = "";
@@ -1462,6 +1457,19 @@
       return hazard.targets.includes(mode);
     }
 
+    function resetConditionalPanels() {
+      selectedId = null;
+      selectedHazardSection.hidden = true;
+      routeGuideSection.hidden = true;
+      routeHazardsSection.hidden = true;
+    }
+
+    function showRoutePanels() {
+      routeGuideSection.hidden = false;
+      routeHazardsSection.hidden = false;
+      renderList();
+    }
+
     function render() {
       profilePill.textContent = `${labels[mode]}向け`;
       document.querySelectorAll(".mode").forEach((button) => {
@@ -1536,9 +1544,11 @@
     function renderSelected() {
       const hazard = hazards.find((item) => item.id === selectedId);
       if (!hazard) {
-        selectedPreview.innerHTML = "<p>マップのピン、またはルート上の一覧を選ぶと詳細が出ます。</p>";
+        selectedHazardSection.hidden = true;
+        selectedPreview.innerHTML = "";
         return;
       }
+      selectedHazardSection.hidden = false;
       const warning = isRelevant(hazard)
         ? `${labels[mode]}では特に注意が必要です。`
         : `${labels[mode]}では優先度は低めですが、通行時は確認してください。`;
@@ -1564,7 +1574,8 @@
       }
       selectedId = null;
       await loadSharedHazards();
-      selectedPreview.innerHTML = "<p>危険ピンを削除しました。</p>";
+      selectedHazardSection.hidden = true;
+      selectedPreview.innerHTML = "";
       if (hazard) {
         alertTitle.textContent = "危険ピンを削除しました";
         alertText.textContent = `${hazard.type}の投稿をマップから消去しました。`;
@@ -1581,6 +1592,9 @@
       if (hazard) {
         realMap.setView([hazard.lat, hazard.lng], Math.max(realMap.getZoom(), hazardVisibleZoom));
         showAlert(hazard);
+        window.requestAnimationFrame(() => {
+          selectedHazardSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
       }
     }
 
@@ -2434,6 +2448,7 @@
 
     function setDestinationFromSearch(result) {
       if (!result || !isInKagawa(result.lat, result.lng)) return;
+      showRoutePanels();
       stopVoiceGuide();
       customDestination = { name: result.name, lat: result.lat, lng: result.lng };
       destinationInput.value = "";
@@ -2479,6 +2494,7 @@
         showKagawaOverview("香川県内の行きたい先をクリックしてください");
         return;
       }
+      showRoutePanels();
       stopVoiceGuide();
       customDestination = {
         name: "地図で選んだ目的地",
@@ -2497,6 +2513,7 @@
     }
 
     function selectPresetDestination() {
+      showRoutePanels();
       customDestination = null;
       const destination = getSelectedDestination();
       updateDestinationText(destination);
@@ -2629,6 +2646,7 @@
     async function startRouteGuide(options = {}) {
       const destination = getSelectedDestination();
       if (!destination) return;
+      showRoutePanels();
       const isAutoReroute = Boolean(options.isAutoReroute);
       if (!isAutoReroute) stopVoiceGuide();
 
